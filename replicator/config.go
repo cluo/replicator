@@ -14,7 +14,7 @@ func DefaultConfig() *Config {
 
 	return &Config{
 		Consul:   "localhost:8500",
-		Nomad:    "localhost:4646",
+		Nomad:    "http://localhost:4646",
 		LogLevel: "INFO",
 		Enforce:  true,
 

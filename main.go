@@ -1,12 +1,20 @@
 package main
 
 import (
-	"fmt"
+	"flag"
+	"os"
 
 	"github.com/elsevier-core-engineering/replicator/replicator"
 )
 
+func init() {
+	// Setup the config CLI flag.
+	var config string
+	flag.StringVar(&config, "config", "", "config file to read overrides")
+	flag.Parse()
+}
+
 func main() {
-	c := replicator.RuntimeStats()
-	fmt.Println(c)
+	cli := replicator.NewCLI()
+	os.Exit(cli.Run(os.Args[1:]))
 }
