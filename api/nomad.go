@@ -98,9 +98,9 @@ func (c *nomadClient) ClusterAllocationCapacity(capacity *ClusterAllocation) (er
 
 		if (resp.Status == "ready") || (resp.Drain != true) {
 			capacity.NodeCount++
-			capacity.ClusterTotalAllocationCapacity.CPUMHz += resp.Resources.CPU
-			capacity.ClusterTotalAllocationCapacity.MemoryMB += resp.Resources.MemoryMB
-			capacity.ClusterTotalAllocationCapacity.DiskMB += resp.Resources.DiskMB
+			capacity.ClusterTotalAllocationCapacity.CPUMHz += *resp.Resources.CPU
+			capacity.ClusterTotalAllocationCapacity.MemoryMB += *resp.Resources.MemoryMB
+			capacity.ClusterTotalAllocationCapacity.DiskMB += *resp.Resources.DiskMB
 		}
 	}
 
@@ -127,9 +127,9 @@ func (c *nomadClient) ClusterAssignedAllocation(capacityUsed *ClusterAllocation)
 		}
 
 		if (resp.ClientStatus == "running") && (resp.DesiredStatus == "run") {
-			capacityUsed.ClusterUsedAllocationCapacity.CPUMHz += resp.Resources.CPU
-			capacityUsed.ClusterUsedAllocationCapacity.MemoryMB += resp.Resources.MemoryMB
-			capacityUsed.ClusterUsedAllocationCapacity.DiskMB += resp.Resources.DiskMB
+			capacityUsed.ClusterUsedAllocationCapacity.CPUMHz += *resp.Resources.CPU
+			capacityUsed.ClusterUsedAllocationCapacity.MemoryMB += *resp.Resources.MemoryMB
+			capacityUsed.ClusterUsedAllocationCapacity.DiskMB += *resp.Resources.DiskMB
 		}
 	}
 	return nil
@@ -184,9 +184,9 @@ func (c *nomadClient) TaskAllocationTotals(capacityUsed *ClusterAllocation) erro
 		// that are running, so we do not need to check the status.
 		for _, taskG := range resp.TaskGroups {
 			for _, task := range taskG.Tasks {
-				capacityUsed.TaskAllocation.CPUMHz += task.Resources.CPU
-				capacityUsed.TaskAllocation.MemoryMB += task.Resources.MemoryMB
-				capacityUsed.TaskAllocation.DiskMB += task.Resources.DiskMB
+				capacityUsed.TaskAllocation.CPUMHz += *task.Resources.CPU
+				capacityUsed.TaskAllocation.MemoryMB += *task.Resources.MemoryMB
+				capacityUsed.TaskAllocation.DiskMB += *task.Resources.DiskMB
 			}
 		}
 	}
