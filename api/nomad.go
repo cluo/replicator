@@ -9,8 +9,9 @@ import (
 // The NomadClient interface is used to provide common method signatures for
 // interacting with the Nomad API.
 type NomadClient interface {
-	AllocationCapacity() (*AllocationCapacity, error)
-	AssignedAllocation() (*AllocationUsed, error)
+	ClusterAllocationCapacity(*ClusterAllocation) error
+	ClusterAssignedAllocation(*ClusterAllocation) error
+	TaskAllocationTotals(*ClusterAllocation) error
 	LeaderCheck() bool
 }
 
@@ -20,17 +21,43 @@ type nomadClient struct {
 	nomad *nomad.Client
 }
 
-// AllocationCapacity is
-type AllocationCapacity struct {
+// ClusterAllocation is the main struct used for compiling information regarding
+// the cluster state which allows us to make cluster scaling decisions.
+type ClusterAllocation struct {
+	// NodeCount is the count of worker nodes in a ready and non-draining state in
+	// the cluster.
+	NodeCount int
+
+	// ClusterTotalAllocationCapacity is the total allocation which the cluster
+	// can support.
+	ClusterTotalAllocationCapacity totalAllocationCapacity
+
+	// ClusterUsedAllocationCapacity is the currently used cluster allocation
+	// across the cluster.
+	ClusterUsedAllocationCapacity usedAllocationCapacity
+
+	// TaskAllocation is the allocation total of all running jobs on the cluster
+	// assuming the count = 1. This is used in order to ensure the cluster has
+	// enough free capacity to scale each task by 1 if an increase in capacity is
+	// required.
+	TaskAllocation taskAllocation
+}
+
+type totalAllocationCapacity struct {
 	MemoryMB int
-	CPU      int
+	CPUMHz   int
 	DiskMB   int
 }
 
-// AllocationUsed is
-type AllocationUsed struct {
+type usedAllocationCapacity struct {
 	MemoryMB int
-	CPU      int
+	CPUMHz   int
+	DiskMB   int
+}
+
+type taskAllocation struct {
+	MemoryMB int
+	CPUMHz   int
 	DiskMB   int
 }
 
@@ -48,16 +75,15 @@ func NewNomadClient(addr string) (NomadClient, error) {
 	return &nomadClient{nomad: c}, nil
 }
 
-// AllocationCapacity determines the total cluster allocation capacity.
-func (c *nomadClient) AllocationCapacity() (capacity *AllocationCapacity, err error) {
-
-	capacity = &AllocationCapacity{}
+// ClusterAllocationCapacity determines the total cluster allocation capacity as
+// well as the total number of available worker nodes.
+func (c *nomadClient) ClusterAllocationCapacity(capacity *ClusterAllocation) (err error) {
 
 	// Get a list of all nodes within the Nomad cluster so that the NodeID can
 	// then be interated upon to find node specific resources.
 	nodes, _, err := c.nomad.Nodes().List(&nomad.QueryOptions{})
 	if err != nil {
-		return capacity, err
+		return err
 	}
 
 	// Iterate the NodeID's and call the Nodes.Info endpoint to gather detailed
@@ -67,29 +93,29 @@ func (c *nomadClient) AllocationCapacity() (capacity *AllocationCapacity, err er
 	for _, node := range nodes {
 		resp, _, err := c.nomad.Nodes().Info(node.ID, &nomad.QueryOptions{})
 		if err != nil {
-			return capacity, err
+			return err
 		}
 
 		if (resp.Status == "ready") || (resp.Drain != true) {
-			capacity.CPU += *resp.Resources.CPU
-			capacity.MemoryMB += *resp.Resources.MemoryMB
-			capacity.DiskMB += *resp.Resources.DiskMB
+			capacity.NodeCount++
+			capacity.ClusterTotalAllocationCapacity.CPUMHz += resp.Resources.CPU
+			capacity.ClusterTotalAllocationCapacity.MemoryMB += resp.Resources.MemoryMB
+			capacity.ClusterTotalAllocationCapacity.DiskMB += resp.Resources.DiskMB
 		}
 	}
 
-	return capacity, nil
+	return nil
 }
 
-// AssignedAllocation iterates
-func (c *nomadClient) AssignedAllocation() (capacityUsed *AllocationUsed, err error) {
-
-	capacityUsed = &AllocationUsed{}
+// ClusterAssignedAllocation iterates the current cluster allocations to provide
+// resource totals of what is currently running.
+func (c *nomadClient) ClusterAssignedAllocation(capacityUsed *ClusterAllocation) (err error) {
 
 	// Get a list of all allocations within the Nomad cluster so that the ID can
 	// then be interated upon to find allocation specific resources.
 	allocs, _, err := c.nomad.Allocations().List(&nomad.QueryOptions{})
 	if err != nil {
-		return capacityUsed, err
+		return err
 	}
 
 	// Iterate through the allocations list so that we can then call
@@ -97,16 +123,16 @@ func (c *nomadClient) AssignedAllocation() (capacityUsed *AllocationUsed, err er
 	for _, alloc := range allocs {
 		resp, _, err := c.nomad.Allocations().Info(alloc.ID, &nomad.QueryOptions{})
 		if err != nil {
-			return capacityUsed, err
+			return err
 		}
 
 		if (resp.ClientStatus == "running") && (resp.DesiredStatus == "run") {
-			capacityUsed.CPU += *resp.Resources.CPU
-			capacityUsed.MemoryMB += *resp.Resources.MemoryMB
-			capacityUsed.DiskMB += *resp.Resources.DiskMB
+			capacityUsed.ClusterUsedAllocationCapacity.CPUMHz += resp.Resources.CPU
+			capacityUsed.ClusterUsedAllocationCapacity.MemoryMB += resp.Resources.MemoryMB
+			capacityUsed.ClusterUsedAllocationCapacity.DiskMB += resp.Resources.DiskMB
 		}
 	}
-	return capacityUsed, nil
+	return nil
 }
 
 // LeaderCheck determines if the local node has cluster leadership.
@@ -130,4 +156,55 @@ func (c *nomadClient) LeaderCheck() bool {
 	}
 
 	return haveLeadership
+}
+
+// TaskAllocationTotals iterates through the running jobs on the cluster to
+// determine the allocations required to scale each job task by a count of 1.
+// This is used to ensure the cluster have enough capacity for scaling events
+// as well as node failure events.
+func (c *nomadClient) TaskAllocationTotals(capacityUsed *ClusterAllocation) error {
+
+	// Get a list of all the jobs on the cluster currently so that we can iterate
+	// the job.ID to find the total task resources assigned per job.
+	jobs, _, err := c.nomad.Jobs().List(&nomad.QueryOptions{})
+	if err != nil {
+		return err
+	}
+
+	// Iterate through the jobs list using the job.ID to call more detailed info
+	// about the job in order to discover
+	for _, job := range jobs {
+		resp, _, err := c.nomad.Jobs().Info(job.ID, &nomad.QueryOptions{})
+		if err != nil {
+			return err
+		}
+
+		// A job can contain multiple taskgroups which can intern contain multiple
+		// tasks; therefore we must iterate this fully. Nomad will only return jobs
+		// that are running, so we do not need to check the status.
+		for _, taskG := range resp.TaskGroups {
+			for _, task := range taskG.Tasks {
+				capacityUsed.TaskAllocation.CPUMHz += task.Resources.CPU
+				capacityUsed.TaskAllocation.MemoryMB += task.Resources.MemoryMB
+				capacityUsed.TaskAllocation.DiskMB += task.Resources.DiskMB
+			}
+		}
+	}
+	return nil
+}
+
+// PercentageCapacityRequired accepts a number of cluster allocation parameters
+// to then calculate the acceptable percentage of capacity remainining to meet
+// the scaling and failure thresholds.
+//
+// nodeCount:         is the total number of ready worker nodes in the cluster
+// allocTotal:        is the allocation totals of each tasks assuming count = 1
+// capacityTotal:     is the total cluster allocation capacity
+// capacityUsed:      is the total cluster allocation currently in use
+// nodeFailureCount:  is the number of acceptable node failures to tollerate
+func PercentageCapacityRequired(nodeCount, allocTotal, capacityTotal, capacityUsed, nodeFailureCount int) (capacityRequired float64) {
+	nodeAvgAlloc := float64(nodeCount / capacityTotal)
+	top := float64((float64(allocTotal)) + (float64(capacityTotal) - (nodeAvgAlloc * float64(nodeFailureCount))))
+	capacityRequired = (top / float64(capacityTotal)) * 100
+	return capacityRequired
 }

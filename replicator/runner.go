@@ -37,11 +37,19 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 			client, _ := api.NewNomadClient(r.config.Nomad)
-			resp, _ := client.AllocationCapacity()
-			res, _ := client.AssignedAllocation()
-			fmt.Printf("CPU: %v %v\n", resp.CPU, res.CPU)
-			fmt.Printf("Memory: %v %v\n", resp.MemoryMB, res.MemoryMB)
-			fmt.Printf("Disk: %v %v\n", resp.DiskMB, res.DiskMB)
+			allocs := &api.ClusterAllocation{}
+
+			client.ClusterAllocationCapacity(allocs)
+			client.ClusterAssignedAllocation(allocs)
+			client.TaskAllocationTotals(allocs)
+
+			res := api.PercentageCapacityRequired(allocs.NodeCount, allocs.TaskAllocation.CPUMHz, allocs.ClusterTotalAllocationCapacity.CPUMHz, allocs.ClusterUsedAllocationCapacity.CPUMHz, 2)
+			fmt.Println(res)
+
+			fmt.Printf("Node Count: %v\n", allocs.NodeCount)
+			fmt.Printf("CPU: %v %v\n", allocs.ClusterUsedAllocationCapacity.CPUMHz, allocs.ClusterTotalAllocationCapacity.CPUMHz)
+			fmt.Printf("Memory: %v %v\n", allocs.ClusterUsedAllocationCapacity.MemoryMB, allocs.ClusterTotalAllocationCapacity.MemoryMB)
+			fmt.Printf("Disk: %v %v\n", allocs.ClusterUsedAllocationCapacity.DiskMB, allocs.ClusterTotalAllocationCapacity.DiskMB)
 			if client.LeaderCheck() {
 				fmt.Printf("We have cluster leadership.\n")
 			}
