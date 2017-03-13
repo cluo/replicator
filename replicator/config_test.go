@@ -13,7 +13,7 @@ func TestParseConfig_correctDefaulValues(t *testing.T) {
 
 	expected := &Config{
 		Consul:   "localhost:8500",
-		Nomad:    "localhost:4646",
+		Nomad:    "http://localhost:4646",
 		LogLevel: "INFO",
 		Enforce:  true,
 

@@ -39,9 +39,12 @@ func (r *Runner) Start() {
 			client, _ := api.NewNomadClient(r.config.Nomad)
 			resp, _ := client.AllocationCapacity()
 			res, _ := client.AssignedAllocation()
-			fmt.Println(resp.CPU, res.CPU)
-			fmt.Println(resp.MemoryMB, res.MemoryMB)
-			fmt.Println(resp.DiskMB, res.DiskMB)
+			fmt.Printf("CPU: %v %v\n", resp.CPU, res.CPU)
+			fmt.Printf("Memory: %v %v\n", resp.MemoryMB, res.MemoryMB)
+			fmt.Printf("Disk: %v %v\n", resp.DiskMB, res.DiskMB)
+			if client.LeaderCheck() {
+				fmt.Printf("We have cluster leadership.\n")
+			}
 		case <-r.doneChan:
 			return
 		}
