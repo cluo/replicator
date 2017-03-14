@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"fmt"
@@ -185,9 +185,4 @@ func terminateInstance(instanceID, region string) error {
 	}
 
 	return nil
-}
-
-func main() {
-	fmt.Println(ScaleInCluster("container_agent-asg-dev", "i-0907b3d40354056d6", NewAWSAsgService("us-east-1")))
-	// fmt.Println(ScaleOutCluster("container_agent-asg-dev", NewAWSAsgService("us-east-1")))
 }
