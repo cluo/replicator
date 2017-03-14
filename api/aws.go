@@ -55,7 +55,7 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) (bool, error)
 	// update to our new desired state.
 	asg, err := DescribeScalingGroup(asgName, svc)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	// The DesiredCapacity is incramented by 1, while the TerminationPolicies and
