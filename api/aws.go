@@ -1,0 +1,193 @@
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/ec2"
+)
+
+// describeAWSRegion uses the EC2 InstanceMetaData endpoint to discover the AWS
+// region in which the instance is running.
+func describeAWSRegion() (region string, err error) {
+	ec2meta := ec2metadata.New(session.New())
+	identity, err := ec2meta.GetInstanceIdentityDocument()
+	if err != nil {
+		return "", err
+	}
+	return identity.Region, nil
+}
+
+// NewAWSAsgService creates a new AWS API Session and ASG service connection for
+// use across all calls as required.
+func NewAWSAsgService(region string) (Session *autoscaling.AutoScaling) {
+	sess := session.Must(session.NewSession())
+	svc := autoscaling.New(sess, &aws.Config{Region: aws.String(region)})
+	return svc
+}
+
+// DescribeScalingGroup returns the AWS ASG information of the specified ASG.
+func DescribeScalingGroup(asgName string, svc *autoscaling.AutoScaling) (asg *autoscaling.DescribeAutoScalingGroupsOutput, err error) {
+
+	params := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{
+			aws.String(asgName),
+		},
+	}
+	resp, err := svc.DescribeAutoScalingGroups(params)
+
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
+}
+
+// ScaleOutCluster scales the Nomad worker pool by 1 instance, using the current
+// configuration as the basis for undertaking the work.
+func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) (bool, error) {
+
+	// Get the current ASG configuration so that we have the basis on which to
+	// update to our new desired state.
+	asg, err := DescribeScalingGroup(asgName, svc)
+	if err != nil {
+		return false
+	}
+
+	// The DesiredCapacity is incramented by 1, while the TerminationPolicies and
+	// AvailabilityZones which are required parameters are copied from the Info
+	// recieved from the initial call to DescribeScalingGroup. These params could
+	// be directly referenced within UpdateAutoScalingGroupInput but are here for
+	// clarity.
+	newDesiredCapacity := *asg.AutoScalingGroups[0].DesiredCapacity + int64(1)
+	terminationPolicies := asg.AutoScalingGroups[0].TerminationPolicies
+	availabilityZones := asg.AutoScalingGroups[0].AvailabilityZones
+
+	// Setup the Input parameters ready for the AWS API call and then trigger the
+	// call which will update the ASG.
+	params := &autoscaling.UpdateAutoScalingGroupInput{
+		AutoScalingGroupName: aws.String(asgName),
+		AvailabilityZones:    availabilityZones,
+		DesiredCapacity:      aws.Int64(newDesiredCapacity),
+		TerminationPolicies:  terminationPolicies,
+	}
+
+	// Currently it is assumed that no error received from the API means that the
+	// increase in ASG size has been successful, or at least will be. This may
+	// want to change in the future.
+	_, err = svc.UpdateAutoScalingGroup(params)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ScaleInCluster scales the cluster size by 1 by using the DetachInstances call
+// to target an instance to remove from the ASG.
+func ScaleInCluster(asgName, instanceID string, svc *autoscaling.AutoScaling) (bool, error) {
+
+	// Setup the Input parameters ready for the AWS API call and then trigger the
+	// call which will remove the identified instance from the ASG and decrement
+	// the capacity to ensure no new instances are launched into the cluster thus
+	// preserving the scale-in situation.
+	params := &autoscaling.DetachInstancesInput{
+		AutoScalingGroupName:           aws.String(asgName),
+		ShouldDecrementDesiredCapacity: aws.Bool(true),
+		InstanceIds: []*string{
+			aws.String(instanceID),
+		},
+	}
+
+	resp, err := svc.DetachInstances(params)
+	if err != nil {
+		return false, err
+	}
+
+	// The initial scaling activity StatusCode is available, so we might as well
+	// check it before calling checkScalingActivityResult even though its highly
+	// unlikely to have already completed.
+	if *resp.Activities[0].StatusCode != "Successful" {
+		err = checkScalingActivityResult(resp.Activities[0].ActivityId, svc)
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// checkScalingActivityResult is used to poll the scaling activity and check for
+// a successful completion.
+func checkScalingActivityResult(activityID *string, svc *autoscaling.AutoScaling) error {
+
+	// Setup our timeout and ticker value. TODO: add a backoff for every call we
+	// make where the scaling event has not completed successfully.
+	ticker := time.NewTicker(time.Second * time.Duration(10))
+	timeOut := time.Tick(time.Minute * 3)
+
+	for {
+		select {
+		case <-timeOut:
+			return fmt.Errorf("timeout %v reached on checking scaling activity success", timeOut)
+		case <-ticker.C:
+
+			// Make a call to the AWS API every tick to ensure we get the latest Info
+			// about the scaling activity status.
+			params := &autoscaling.DescribeScalingActivitiesInput{
+				ActivityIds: []*string{
+					aws.String(*activityID),
+				},
+			}
+			resp, err := svc.DescribeScalingActivities(params)
+			if err != nil {
+				return err
+			}
+
+			// Fail fast; if the scaling activity is in a failed or cancelled state
+			// we exit. The final check is to see whether or not we have got the
+			// Successful state which indicates a completed scaling activity.
+			if *resp.Activities[0].StatusCode == "Failed" || *resp.Activities[0].StatusCode == "Cancelled" {
+				return fmt.Errorf("scaling activity %v was unsuccessful ", activityID)
+			}
+			if *resp.Activities[0].StatusCode == "Successful" {
+				return nil
+			}
+		}
+	}
+}
+
+// terminateInstance will terminate the supplied EC2 instance.
+func terminateInstance(instanceID, region string) error {
+
+	// Setup the session and the EC2 service link to use for this operation.
+	sess := session.Must(session.NewSession())
+	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})
+
+	params := &ec2.TerminateInstancesInput{
+		InstanceIds: []*string{
+			aws.String(instanceID),
+		},
+		DryRun: aws.Bool(false),
+	}
+
+	// We do not care about the response data, only if we recieve an error or not
+	// from the API which should be indication enough to ensure the instance is
+	// terminating.
+	_, err := svc.TerminateInstances(params)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	fmt.Println(ScaleInCluster("container_agent-asg-dev", "i-0907b3d40354056d6", NewAWSAsgService("us-east-1")))
+	// fmt.Println(ScaleOutCluster("container_agent-asg-dev", NewAWSAsgService("us-east-1")))
+}
