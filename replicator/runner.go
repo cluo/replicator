@@ -29,7 +29,7 @@ func NewRunner(config *Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(10))
+	ticker := time.NewTicker(time.Second * time.Duration(1))
 
 	defer ticker.Stop()
 
@@ -41,18 +41,31 @@ func (r *Runner) Start() {
 
 			client.ClusterAllocationCapacity(allocs)
 			client.ClusterAssignedAllocation(allocs)
-			client.TaskAllocationTotals(allocs)
 
-			res := api.PercentageCapacityRequired(allocs.NodeCount, allocs.TaskAllocation.CPUMHz, allocs.ClusterTotalAllocationCapacity.CPUMHz, allocs.ClusterUsedAllocationCapacity.CPUMHz, 2)
+			for _, nodeAllocs := range allocs.NodeAllocations {
+				fmt.Printf("Node ID: %v, CPU Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.CPUPercent)
+				fmt.Printf("Node ID: %v, Mem Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.MemoryPercent)
+				fmt.Printf("Node ID: %v, Disk Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.DiskPercent)
+			}
+
+			client.TaskAllocationTotals(allocs)
+			client.MostUtilizedResource(allocs)
+			fmt.Printf("Scaling Metric: %v\n", allocs.ScalingMetric)
+
+			res := api.PercentageCapacityRequired(allocs.NodeCount, allocs.TaskAllocation.CPUMHz, allocs.TotalCapacity.CPUMHz, allocs.UsedCapacity.CPUMHz, 2)
 			fmt.Println(res)
 
 			fmt.Printf("Node Count: %v\n", allocs.NodeCount)
-			fmt.Printf("CPU: %v %v\n", allocs.ClusterUsedAllocationCapacity.CPUMHz, allocs.ClusterTotalAllocationCapacity.CPUMHz)
-			fmt.Printf("Memory: %v %v\n", allocs.ClusterUsedAllocationCapacity.MemoryMB, allocs.ClusterTotalAllocationCapacity.MemoryMB)
-			fmt.Printf("Disk: %v %v\n", allocs.ClusterUsedAllocationCapacity.DiskMB, allocs.ClusterTotalAllocationCapacity.DiskMB)
+			fmt.Printf("CPU: %v %v\n", allocs.UsedCapacity.CPUMHz, allocs.TotalCapacity.CPUMHz)
+			fmt.Printf("Memory: %v %v\n", allocs.UsedCapacity.MemoryMB, allocs.TotalCapacity.MemoryMB)
+			fmt.Printf("Disk: %v %v\n", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
 			if client.LeaderCheck() {
 				fmt.Printf("We have cluster leadership.\n")
 			}
+
+			target := client.LeastAllocatedNode(allocs)
+			fmt.Printf("Least Allocated Node: %v\n", target)
+			// client.DrainNode(target)
 		case <-r.doneChan:
 			return
 		}
