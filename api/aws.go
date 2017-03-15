@@ -111,19 +111,62 @@ func ScaleInCluster(asgName, instanceID string, svc *autoscaling.AutoScaling) (b
 	// check it before calling checkScalingActivityResult even though its highly
 	// unlikely to have already completed.
 	if *resp.Activities[0].StatusCode != "Successful" {
-		err = checkScalingActivityResult(resp.Activities[0].ActivityId, svc)
+		err = checkClusterScalingResult(resp.Activities[0].ActivityId, svc)
 	}
 
 	if err != nil {
 		return false, err
 	}
 
+	// The instance must now be terminated using the AWS EC2 API.
+	err = terminateInstance(instanceID, *svc.Config.Region)
+
+	if err != nil {
+		return false, fmt.Errorf("an error occured terminating instance %v", instanceID)
+	}
+
 	return true, nil
 }
 
-// checkScalingActivityResult is used to poll the scaling activity and check for
+// CheckClusterScalingTimeThreshold checks the last cluster scaling event time
+// and compares against the cooldown period to determine whether or not a
+// cluster scaling event can happen.
+func CheckClusterScalingTimeThreshold(cooldown int, asgName string, svc *autoscaling.AutoScaling) (bool, error) {
+
+	// Only supply the ASG name as we want to see all the recent scaling activity
+	// to be able to make the correct descision.
+	params := &autoscaling.DescribeScalingActivitiesInput{
+		AutoScalingGroupName: aws.String(asgName),
+	}
+
+	resp, err := svc.DescribeScalingActivities(params)
+
+	if err != nil {
+		return false, err
+	}
+
+	// The last scaling activity to happen is determined irregardless of whether
+	// or not it was successful; it was still a scaling event. Times from AWS are
+	// based on UTC, and so the current time does the same.
+	timeThreshold := time.Now().UTC().Add(-time.Second * time.Duration(cooldown))
+	lastActivity := *resp.Activities[0].EndTime
+	fmt.Println(timeThreshold, lastActivity)
+
+	// Compare the two dates to see if the current time minus the cooldown is
+	// before the last scaling activity. If it was before, this indicates the
+	// cooldown has not been met.
+	cooldownMet := lastActivity.Before(timeThreshold)
+
+	if cooldownMet != true {
+		return false, fmt.Errorf("cooldown of %v seconds has not been met on cluster scaling events", cooldown)
+	}
+
+	return true, nil
+}
+
+// checkClusterScalingResult is used to poll the scaling activity and check for
 // a successful completion.
-func checkScalingActivityResult(activityID *string, svc *autoscaling.AutoScaling) error {
+func checkClusterScalingResult(activityID *string, svc *autoscaling.AutoScaling) error {
 
 	// Setup our timeout and ticker value. TODO: add a backoff for every call we
 	// make where the scaling event has not completed successfully.
