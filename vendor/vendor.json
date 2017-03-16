@@ -331,12 +331,6 @@
 			"revisionTime": "2017-03-15T18:30:28Z"
 		},
 		{
-			"checksumSHA1": "3Ep23BD/FtLVO84ga/tHtPguXwo=",
-			"path": "github.com/hashicorp/nomad/nomad/structs",
-			"revision": "e943b953c19b862e3e4c4ba5fd311d52e9058499",
-			"revisionTime": "2017-03-15T18:30:28Z"
-		},
-		{
 			"checksumSHA1": "ZpqwBCoIc/KpD6F75ffK7lyAgd4=",
 			"path": "github.com/hashicorp/raft",
 			"revision": "5f09c4ffdbcd2a53768e78c47717415de12b6728",
