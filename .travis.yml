@@ -18,7 +18,7 @@ deploy:
   go: 1.8
   file:
     - pkg/darwin-386-replicator
-    - pkg/darwin-amd64-replicator§
+    - pkg/darwin-amd64-replicator
     - pkg/freebsd-386-replicator
     - pkg/freebsd-amd64-replicator
     - pkg/freebsd-arm-replicator
