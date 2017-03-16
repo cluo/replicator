@@ -44,6 +44,10 @@ type ClusterScaling struct {
 	// MinSize is the minimum number of instances that should be present within
 	// the nomad node worker pool.
 	MinSize float64 `mapstructure:"min_size"`
+
+	// CoolDown is the number of seconds after a scaling activity completes before
+	// another can begin.
+	CoolDown float64 `mapstructure:"cool_down"`
 }
 
 // JobScaling is the configuration struct for the Nomad job scaling activities.
