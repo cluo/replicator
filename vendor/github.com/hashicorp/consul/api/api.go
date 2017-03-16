@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -80,11 +79,6 @@ type QueryOptions struct {
 	// metadata key/value pairs. Currently, only one key/value pair can
 	// be provided for filtering.
 	NodeMeta map[string]string
-
-	// RelayFactor is used in keyring operations to cause reponses to be
-	// relayed back to the sender through N other random nodes. Must be
-	// a value from 0 to 5 (inclusive).
-	RelayFactor uint8
 }
 
 // WriteOptions are used to parameterize a write
@@ -96,11 +90,6 @@ type WriteOptions struct {
 	// Token is used to provide a per-request ACL token
 	// which overrides the agent's default token.
 	Token string
-
-	// RelayFactor is used in keyring operations to cause reponses to be
-	// relayed back to the sender through N other random nodes. Must be
-	// a value from 0 to 5 (inclusive).
-	RelayFactor uint8
 }
 
 // QueryMeta is used to return meta data about a query
@@ -347,22 +336,13 @@ func NewClient(config *Config) (*Client, error) {
 		config.HttpClient = defConfig.HttpClient
 	}
 
-	parts := strings.SplitN(config.Address, "://", 2)
-	if len(parts) == 2 {
-		switch parts[0] {
-		case "http":
-		case "https":
-			config.Scheme = "https"
-		case "unix":
-			trans := cleanhttp.DefaultTransport()
-			trans.DialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", parts[1])
-			}
-			config.HttpClient = &http.Client{
-				Transport: trans,
-			}
-		default:
-			return nil, fmt.Errorf("Unknown protocol scheme: %s", parts[0])
+	if parts := strings.SplitN(config.Address, "unix://", 2); len(parts) == 2 {
+		trans := cleanhttp.DefaultTransport()
+		trans.Dial = func(_, _ string) (net.Conn, error) {
+			return net.Dial("unix", parts[1])
+		}
+		config.HttpClient = &http.Client{
+			Transport: trans,
 		}
 		config.Address = parts[1]
 	}
@@ -416,9 +396,6 @@ func (r *request) setQueryOptions(q *QueryOptions) {
 			r.params.Add("node-meta", key+":"+value)
 		}
 	}
-	if q.RelayFactor != 0 {
-		r.params.Set("relay-factor", strconv.Itoa(int(q.RelayFactor)))
-	}
 }
 
 // durToMsec converts a duration to a millisecond specified string. If the
@@ -459,9 +436,6 @@ func (r *request) setWriteOptions(q *WriteOptions) {
 	}
 	if q.Token != "" {
 		r.header.Set("X-Consul-Token", q.Token)
-	}
-	if q.RelayFactor != 0 {
-		r.params.Set("relay-factor", strconv.Itoa(int(q.RelayFactor)))
 	}
 }
 
