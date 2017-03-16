@@ -7,7 +7,6 @@ import (
 	"github.com/dariubs/percent"
 	"github.com/elsevier-core-engineering/replicator/helper"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/nomad/nomad/structs"
 )
 
 // NomadClient exposes all API methods needed to interact with the Nomad API,
@@ -371,7 +370,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 			// Iterate over allocations, if any are running or pending, increment the active
 			// allocations counter.
 			for _, nodeAlloc := range allocations {
-				if (nodeAlloc.ClientStatus == structs.JobStatusRunning) || (nodeAlloc.ClientStatus == structs.JobStatusPending) {
+				if (nodeAlloc.ClientStatus == "running") || (nodeAlloc.ClientStatus == "pending") {
 					activeAllocations++
 				}
 			}
