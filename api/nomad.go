@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dariubs/percent"
+	"github.com/elsevier-core-engineering/replicator/helper"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -235,7 +236,7 @@ func (c *nomadClient) LeaderCheck() bool {
 		fmt.Printf("replicator: unable to retrieve local agent information")
 	} else {
 
-		if FindIP(leader) == self.Member.Addr {
+		if helper.FindIP(leader) == self.Member.Addr {
 			haveLeadership = true
 		}
 	}
@@ -284,7 +285,7 @@ func (c *nomadClient) TaskAllocationTotals(capacityUsed *ClusterAllocation) erro
 func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
 	// Determine the resource that is consuming the greatest percentage of its overall cluster
 	// capacity.
-	max := (Max(alloc.UsedCapacity.CPUPercent, alloc.UsedCapacity.MemoryPercent,
+	max := (helper.Max(alloc.UsedCapacity.CPUPercent, alloc.UsedCapacity.MemoryPercent,
 		alloc.UsedCapacity.DiskPercent))
 
 	// Set the compute cluster scaling metric to the most-utilized resource.
