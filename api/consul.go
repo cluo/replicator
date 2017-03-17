@@ -8,18 +8,45 @@ import (
 	consul "github.com/hashicorp/consul/api"
 )
 
-// ScalingPolicies is a list of ScalingPolicy objects.
-type ScalingPolicies []*ScalingPolicy
+// JobScalingPolicies is a list of ScalingPolicy objects.
+type JobScalingPolicies []*JobScalingPolicy
 
-// ScalingPolicy is a struct which represents an individual jobs scaling policy
+// JobScalingPolicy is a struct which represents an individual job scaling policy
 // document.
-type ScalingPolicy struct {
+type JobScalingPolicy struct {
 	// JobName is the name of the Nomad job represented by the Consul Key/Value.
 	JobName string
 
 	// Enabled is a boolean falg which dictates whether scaling events for the job
 	// should be enforced and is used for testing purposes.
 	Enabled bool `json:"enabled"`
+
+	// GroupScalingPolicies is a list of GroupScalingPolicy objects.
+	GroupScalingPolicies []*GroupScalingPolicy `json:"groups"`
+}
+
+// GroupScalingPolicy represents the scaling policy of an individual group within
+// a signle job.
+type GroupScalingPolicy struct {
+	// GroupName is the jobs Group name which this scaling policy represents.
+	GroupName string `json:"name"`
+
+	// Scaling
+	Scaling *Scaling
+}
+
+type Scaling struct {
+	// Min in the minimum number of tasks the job should have running at any one
+	// time.
+	Min int `json:"min"`
+
+	// Max in the maximum number of tasks the job should have running at any one
+	// time.
+	Max int `json:"max"`
+
+	// ScaleDirection is populated by either up/down depending on the evalution
+	// of a scaling event happening.
+	ScaleDirection string
 
 	// ScaleOut is the job scaling out policy which will contain the thresholds
 	// which control scaling activies.
@@ -43,7 +70,7 @@ type scalein struct {
 // The Client interface is used to provide common method signatures for
 // interacting with the Consul API.
 type Client interface {
-	ListConsulKV(string, string) ([]*ScalingPolicy, error)
+	ListConsulKV(string, string) ([]*JobScalingPolicy, error)
 }
 
 // The client object is a wrapper to the Consul client provided by the Consul
@@ -72,9 +99,9 @@ func NewConsulClient(addr string) (Client, error) {
 // ListConsulKV provides a recursed list of Consul KeyValues at the defined
 // location and can accept an ACL Token if this is enabled on the Consul cluster
 // being used.
-func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*ScalingPolicy, error) {
+func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*JobScalingPolicy, error) {
 
-	var entries []*ScalingPolicy
+	var entries []*JobScalingPolicy
 
 	// Setup the QueryOptions to include the aclToken if this has been set, if not
 	// procede with empty QueryOptions struct.
@@ -97,7 +124,7 @@ func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*ScalingPolicy, e
 		// the appropriate struct.
 		uEnc := base64.URLEncoding.EncodeToString([]byte(job.Value))
 		uDec, _ := base64.URLEncoding.DecodeString(uEnc)
-		s := &ScalingPolicy{}
+		s := &JobScalingPolicy{}
 		json.Unmarshal(uDec, s)
 
 		// Trim the Key and its trailing slash to find the job name.
