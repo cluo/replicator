@@ -1,9 +1,8 @@
-package main
+package api
 
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	consul "github.com/hashicorp/consul/api"
@@ -137,10 +136,4 @@ func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*JobScalingPolicy
 	}
 
 	return entries, nil
-}
-
-func main() {
-	c, _ := NewConsulClient("localhost:8500")
-	resp, _ := c.ListConsulKV("", "replicator/config/jobs")
-	fmt.Println(resp[1].GroupScalingPolicies[0].GroupName)
 }
