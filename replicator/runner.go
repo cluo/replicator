@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
+	config "github.com/elsevier-core-engineering/replicator/config/structs"
 )
 
 // Runner is the main runner struct.
@@ -14,11 +15,11 @@ type Runner struct {
 
 	// config is the Config that created this Runner. It is used internally to
 	// construct other objects and pass data.
-	config *Config
+	config *config.Config
 }
 
 // NewRunner sets up the Runner type.
-func NewRunner(config *Config) (*Runner, error) {
+func NewRunner(config *config.Config) (*Runner, error) {
 	runner := &Runner{
 		doneChan: make(chan struct{}),
 		config:   config,
@@ -37,6 +38,8 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 			client, _ := api.NewNomadClient(r.config.Nomad)
+			consulClient, _ := api.NewConsulClient(r.config.Consul)
+
 			allocs := &api.ClusterAllocation{}
 
 			client.ClusterAllocationCapacity(allocs)
@@ -61,6 +64,16 @@ func (r *Runner) Start() {
 			fmt.Printf("Disk: %v %v\n", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
 			if client.LeaderCheck() {
 				fmt.Printf("We have cluster leadership.\n")
+			}
+
+			scalingPolicies, _ := consulClient.ListConsulKV("", "replicator/config/jobs", r.config)
+
+			for _, policy := range scalingPolicies {
+				fmt.Println(policy.JobName)
+				fmt.Println(len(policy.GroupScalingPolicies))
+				for _, groupPolicy := range policy.GroupScalingPolicies {
+					fmt.Println(groupPolicy.Scaling.Max)
+				}
 			}
 
 			target := client.LeastAllocatedNode(allocs)

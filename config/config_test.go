@@ -1,33 +1,34 @@
-package replicator
+package config
 
 import (
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/hashicorp/consul-template/test"
 )
 
 func TestParseConfig_correctDefaulValues(t *testing.T) {
 	config := DefaultConfig()
 
-	expected := &Config{
+	expected := &structs.Config{
 		Consul:   "localhost:8500",
 		Nomad:    "http://localhost:4646",
 		LogLevel: "INFO",
 		Enforce:  true,
 
-		ClusterScaling: &ClusterScaling{
+		ClusterScaling: &structs.ClusterScaling{
 			MaxSize:  10,
 			MinSize:  5,
 			CoolDown: 300,
 		},
 
-		JobScaling: &JobScaling{
+		JobScaling: &structs.JobScaling{
 			ConsulKeyLocation: "replicator/config/jobs",
 		},
 
-		Telemetry: &Telemetry{},
+		Telemetry: &structs.Telemetry{},
 	}
 
 	if !reflect.DeepEqual(config, expected) {
@@ -51,23 +52,23 @@ func TestParseConfig_correctNestedPartialOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := &Config{
+	expected := &structs.Config{
 		Consul:   "consul.tiorap.systems:8500",
 		Nomad:    "nomad.tiorap.systems:4646",
 		LogLevel: "INFO",
 		Enforce:  true,
 
-		ClusterScaling: &ClusterScaling{
+		ClusterScaling: &structs.ClusterScaling{
 			MaxSize:  15,
 			MinSize:  5,
 			CoolDown: 300,
 		},
 
-		JobScaling: &JobScaling{
+		JobScaling: &structs.JobScaling{
 			ConsulKeyLocation: "replicator/config/jobs",
 		},
 
-		Telemetry: &Telemetry{},
+		Telemetry: &structs.Telemetry{},
 	}
 	if !reflect.DeepEqual(c, expected) {
 		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, c)
@@ -104,24 +105,24 @@ func TestParseConfig_correctFullOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := &Config{
+	expected := &structs.Config{
 		Consul:   "consul.tiorap.systems:8500",
 		Nomad:    "nomad.tiorap.systems:4646",
 		LogLevel: "DEBUG",
 		Enforce:  false,
 
-		ClusterScaling: &ClusterScaling{
+		ClusterScaling: &structs.ClusterScaling{
 			MaxSize:  1000,
 			MinSize:  100,
 			CoolDown: 100,
 		},
 
-		JobScaling: &JobScaling{
+		JobScaling: &structs.JobScaling{
 			ConsulKeyLocation: "tiorap/replicator/config",
 			ConsulToken:       "supersecrettokenthingy",
 		},
 
-		Telemetry: &Telemetry{
+		Telemetry: &structs.Telemetry{
 			StatsdAddress: "statsd.tiorap.systems:8125",
 		},
 	}

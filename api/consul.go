@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	config "github.com/elsevier-core-engineering/replicator/config/structs"
 	consul "github.com/hashicorp/consul/api"
 )
 
@@ -70,7 +72,7 @@ type scalein struct {
 // The Client interface is used to provide common method signatures for
 // interacting with the Consul API.
 type Client interface {
-	ListConsulKV(string, string) ([]*JobScalingPolicy, error)
+	ListConsulKV(string, string, *config.Config) ([]*JobScalingPolicy, error)
 }
 
 // The client object is a wrapper to the Consul client provided by the Consul
@@ -99,8 +101,7 @@ func NewConsulClient(addr string) (Client, error) {
 // ListConsulKV provides a recursed list of Consul KeyValues at the defined
 // location and can accept an ACL Token if this is enabled on the Consul cluster
 // being used.
-func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*JobScalingPolicy, error) {
-
+func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Config) ([]*JobScalingPolicy, error) {
 	var entries []*JobScalingPolicy
 
 	// Setup the QueryOptions to include the aclToken if this has been set, if not
@@ -119,7 +120,6 @@ func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*JobScalingPolicy
 	// Loop the returned list to gather information on each and every job that has
 	// a scaling document.
 	for _, job := range resp {
-
 		// The results Value is base64 encoded. It is decoded and marshelled into
 		// the appropriate struct.
 		uEnc := base64.URLEncoding.EncodeToString([]byte(job.Value))
@@ -135,5 +135,6 @@ func (c *client) ListConsulKV(aclToken, keyLocation string) ([]*JobScalingPolicy
 		entries = append(entries, s)
 	}
 
+	fmt.Println(entries[0].JobName)
 	return entries, nil
 }
