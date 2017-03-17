@@ -21,6 +21,18 @@ type ScalingPolicy struct {
 	// should be enforced and is used for testing purposes.
 	Enabled bool `json:"enabled"`
 
+	// Min in the minimum number of tasks the job should have running at any one
+	// time.
+	Min int `json:"min"`
+
+	// Max in the maximum number of tasks the job should have running at any one
+	// time.
+	Max int `json:"max"`
+
+	// ScaleDirection is populated by either up/down depending on the evalution
+	// of a scaling event happening.
+	ScaleDirection string
+
 	// ScaleOut is the job scaling out policy which will contain the thresholds
 	// which control scaling activies.
 	ScaleOut *scaleout `json:"scaleout"`
