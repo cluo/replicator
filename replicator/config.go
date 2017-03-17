@@ -19,8 +19,9 @@ func DefaultConfig() *Config {
 		Enforce:  true,
 
 		ClusterScaling: &ClusterScaling{
-			MaxSize: 10,
-			MinSize: 5,
+			MaxSize:  10,
+			MinSize:  5,
+			CoolDown: 300,
 		},
 
 		JobScaling: &JobScaling{
@@ -113,6 +114,9 @@ func (c *Config) Merge(o *Config) {
 		}
 		if o.WasSet("cluster_scaling.min_size") {
 			c.ClusterScaling.MinSize = o.ClusterScaling.MinSize
+		}
+		if o.WasSet("cluster_scaling.cool_down") {
+			c.ClusterScaling.CoolDown = o.ClusterScaling.CoolDown
 		}
 	}
 	if o.WasSet("job_scaling") {
