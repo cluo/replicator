@@ -385,7 +385,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	}
 }
 
-// JobScale takes a Scaling Policy and thten attempts to scale the desired job
+// JobScale takes a Scaling Policy and then attempts to scale the desired job
 // to the appropriate level whilst ensuring the event will not excede any job
 // thresholds set.
 func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
@@ -410,31 +410,33 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
 				if group.Scaling.ScaleDirection == "Out" && *taskGroup.Count >= group.Scaling.Max ||
 					group.Scaling.ScaleDirection == "In" && *taskGroup.Count <= group.Scaling.Min {
 
-					return fmt.Errorf("scale %v operation not permitted due to min/max constraints", group.Scaling.ScaleDirection)
+					return fmt.Errorf("scale %v operation not permitted due to min/max constraints",
+						group.Scaling.ScaleDirection)
 				}
 
-				if *taskGroup.Name == group.GroupName {
+				// Depending on the scaling direction decrement/incrament the count;
+				// currently replicator only supports addition/subtraction of 1.
+				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "Out" {
+					*jobResp.TaskGroups[0].Count++
+				}
 
-					// Depending on the scaling direction decrement/incrament the count; currently
-					// replicator only supports addition/subtraction of 1.
-					if group.Scaling.ScaleDirection == "Out" {
-						*jobResp.TaskGroups[0].Count++
-					}
-
-					if group.Scaling.ScaleDirection == "In" {
-						*jobResp.TaskGroups[0].Count--
-					}
+				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "In" {
+					*jobResp.TaskGroups[0].Count--
 				}
 			}
 		}
 	}
 
-	// TODO: Jrasell - use the Nomad 0.5.5 validation function to validate the job
-	// before sending it to Nomad.
+	// Nomad 0.5.5 introduced a Jobs.Validate endpoint within the API package
+	// which validates the job syntax before submition.
+	_, _, err = c.nomad.Jobs().Validate(jobResp, &nomad.WriteOptions{})
+	if err != nil {
+		return err
+	}
+
 	// Submit the job to the Register API endpoint with the altered count number
 	// and check that no error is returned.
 	_, _, err = c.nomad.Jobs().Register(jobResp, &nomad.WriteOptions{})
-
 	if err != nil {
 		return err
 	}
