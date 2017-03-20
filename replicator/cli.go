@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
 // Setup our exit codes; errors start at 10 for easier debugging.
@@ -36,6 +38,9 @@ func (cli *CLI) Run(args []string) int {
 	if err != nil {
 		return ExitCodeParseFlagsError
 	}
+
+	// Set the logging level for the logger.
+	logging.SetLevel(c.LogLevel)
 
 	// Create the initial runner with the merged configuration parameters.
 	runner, err := NewRunner(c)
