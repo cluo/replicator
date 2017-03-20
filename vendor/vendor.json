@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "LboRNz/w5Ggg89VepvE003CJIT8=",
+			"path": "github.com/Sirupsen/logrus",
+			"revision": "abc6f20dabf4b10195f233ad21ea6c5ba33acae0",
+			"revisionTime": "2016-11-11T12:09:51Z"
+		},
+		{
 			"checksumSHA1": "x2JXwE0SXPAnBRJTcP/z920hfLY=",
 			"origin": "github.com/hashicorp/nomad/vendor/github.com/armon/go-metrics",
 			"path": "github.com/armon/go-metrics",
