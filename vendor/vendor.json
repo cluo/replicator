@@ -16,6 +16,12 @@
 			"revisionTime": "2017-03-15T18:30:28Z"
 		},
 		{
+			"checksumSHA1": "gNO0JNpLzYOdInGeq7HqMZUzx9M=",
+			"path": "github.com/armon/go-radix",
+			"revision": "4239b77079c7b5d1243b7b4736304ce8ddb6f0f2",
+			"revisionTime": "2016-01-15T23:47:25Z"
+		},
+		{
 			"checksumSHA1": "ZfDLreBle3gvVHKoIZl4/ArtWzk=",
 			"path": "github.com/aws/aws-sdk-go/aws",
 			"revision": "2b26ad567f305510849d93c5d2025a8b561f2367",
@@ -217,10 +223,34 @@
 			"revisionTime": "2017-03-07T21:44:13Z"
 		},
 		{
+			"checksumSHA1": "QJREe9lAiM1nxkMGGLfrWKUreiE=",
+			"path": "github.com/hashicorp/consul/acl",
+			"revision": "8ef76ec85131c9fdde6f6da26431fb40b68881f4",
+			"revisionTime": "2016-11-15T01:59:54Z"
+		},
+		{
 			"checksumSHA1": "ygEjA1d52B1RDmZu8+1WTwkrYDQ=",
 			"path": "github.com/hashicorp/consul/api",
 			"revision": "a64dea878b955db8a9338a5bb3efc09051ff9489",
 			"revisionTime": "2017-01-27T21:33:27Z"
+		},
+		{
+			"checksumSHA1": "25HaFWmVJ2rMwVkQy0S8Fy+8K8s=",
+			"path": "github.com/hashicorp/consul/consul/structs",
+			"revision": "8ef76ec85131c9fdde6f6da26431fb40b68881f4",
+			"revisionTime": "2016-11-15T01:59:54Z"
+		},
+		{
+			"checksumSHA1": "BuOGVqQNO+iuqoGKAGGxCxC51ro=",
+			"path": "github.com/hashicorp/consul/testutil",
+			"revision": "8ef76ec85131c9fdde6f6da26431fb40b68881f4",
+			"revisionTime": "2016-11-15T01:59:54Z"
+		},
+		{
+			"checksumSHA1": "oQBVnohHMtF/4HuDCYKkhy+ijZ4=",
+			"path": "github.com/hashicorp/consul/types",
+			"revision": "8ef76ec85131c9fdde6f6da26431fb40b68881f4",
+			"revisionTime": "2016-11-15T01:59:54Z"
 		},
 		{
 			"checksumSHA1": "cdOCt0Yb+hdErz8NAQqayxPmRsY=",
@@ -263,6 +293,18 @@
 			"path": "github.com/hashicorp/go-version",
 			"revision": "e943b953c19b862e3e4c4ba5fd311d52e9058499",
 			"revisionTime": "2017-03-15T18:30:28Z"
+		},
+		{
+			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",
+			"path": "github.com/hashicorp/golang-lru",
+			"revision": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6",
+			"revisionTime": "2016-08-13T22:13:03Z"
+		},
+		{
+			"checksumSHA1": "9hffs0bAIU6CquiRhKQdzjHnKt0=",
+			"path": "github.com/hashicorp/golang-lru/simplelru",
+			"revision": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6",
+			"revisionTime": "2016-08-13T22:13:03Z"
 		},
 		{
 			"checksumSHA1": "Ok3Csn6Voou7pQT6Dv2mkwpqFtw=",
