@@ -1,10 +1,10 @@
 package replicator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
+	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
 // Runner is the main runner struct.
@@ -43,28 +43,28 @@ func (r *Runner) Start() {
 			client.ClusterAssignedAllocation(allocs)
 
 			for _, nodeAllocs := range allocs.NodeAllocations {
-				fmt.Printf("Node ID: %v, CPU Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.CPUPercent)
-				fmt.Printf("Node ID: %v, Mem Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.MemoryPercent)
-				fmt.Printf("Node ID: %v, Disk Percent: %v\n", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.DiskPercent)
+				logging.Info("Node ID: %v, CPU Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.CPUPercent)
+				logging.Info("Node ID: %v, Mem Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.MemoryPercent)
+				logging.Info("Node ID: %v, Disk Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.DiskPercent)
 			}
 
 			client.TaskAllocationTotals(allocs)
 			client.MostUtilizedResource(allocs)
-			fmt.Printf("Scaling Metric: %v\n", allocs.ScalingMetric)
+			logging.Info("Scaling Metric: %v", allocs.ScalingMetric)
 
 			res := api.PercentageCapacityRequired(allocs.NodeCount, allocs.TaskAllocation.CPUMHz, allocs.TotalCapacity.CPUMHz, allocs.UsedCapacity.CPUMHz, 2)
-			fmt.Println(res)
+			logging.Info("precentage cluster capactity required: %v", res)
 
-			fmt.Printf("Node Count: %v\n", allocs.NodeCount)
-			fmt.Printf("CPU: %v %v\n", allocs.UsedCapacity.CPUMHz, allocs.TotalCapacity.CPUMHz)
-			fmt.Printf("Memory: %v %v\n", allocs.UsedCapacity.MemoryMB, allocs.TotalCapacity.MemoryMB)
-			fmt.Printf("Disk: %v %v\n", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
+			logging.Info("Node Count: %v", allocs.NodeCount)
+			logging.Info("CPU: %v %v", allocs.UsedCapacity.CPUMHz, allocs.TotalCapacity.CPUMHz)
+			logging.Info("Memory: %v %v", allocs.UsedCapacity.MemoryMB, allocs.TotalCapacity.MemoryMB)
+			logging.Info("Disk: %v %v", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
 			if client.LeaderCheck() {
-				fmt.Printf("We have cluster leadership.\n")
+				logging.Info("We have cluster leadership.")
 			}
 
 			target := client.LeastAllocatedNode(allocs)
-			fmt.Printf("Least Allocated Node: %v\n", target)
+			logging.Info("Least Allocated Node: %v", target)
 			// client.DrainNode(target)
 		case <-r.doneChan:
 			return

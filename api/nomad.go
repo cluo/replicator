@@ -6,6 +6,7 @@ import (
 
 	"github.com/dariubs/percent"
 	"github.com/elsevier-core-engineering/replicator/helper"
+	"github.com/elsevier-core-engineering/replicator/logging"
 	nomad "github.com/hashicorp/nomad/api"
 )
 
@@ -213,7 +214,7 @@ func CalculateUsage(clusterInfo *ClusterAllocation) {
 	for _, nodeUsage := range clusterInfo.NodeAllocations {
 		nodeUsage.UsedCapacity.CPUPercent = percent.PercentOf(nodeUsage.UsedCapacity.CPUMHz,
 			clusterInfo.UsedCapacity.CPUMHz)
-		fmt.Printf("Node Used: %v (%v), Cluster Used: %v\n", nodeUsage.UsedCapacity.CPUMHz, nodeUsage.UsedCapacity.CPUPercent, clusterInfo.UsedCapacity.CPUMHz)
+		logging.Debug("Node Used: %v (%v), Cluster Used: %v\n", nodeUsage.UsedCapacity.CPUMHz, nodeUsage.UsedCapacity.CPUPercent, clusterInfo.UsedCapacity.CPUMHz)
 		nodeUsage.UsedCapacity.DiskPercent = percent.PercentOf(nodeUsage.UsedCapacity.DiskMB,
 			clusterInfo.UsedCapacity.DiskMB)
 		nodeUsage.UsedCapacity.MemoryPercent = percent.PercentOf(nodeUsage.UsedCapacity.MemoryMB,
@@ -227,12 +228,12 @@ func (c *nomadClient) LeaderCheck() bool {
 
 	leader, err := c.nomad.Status().Leader()
 	if (err != nil) || (len(leader) == 0) {
-		fmt.Printf("replicator: failed to identify cluster leader")
+		logging.Error("replicator: failed to identify cluster leader")
 	}
 
 	self, err := c.nomad.Agent().Self()
 	if err != nil {
-		fmt.Printf("replicator: unable to retrieve local agent information")
+		logging.Error("replicator: unable to retrieve local agent information")
 	} else {
 
 		if helper.FindIP(leader) == self.Member.Addr {
@@ -345,7 +346,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	if (err != nil) || (resp.Drain != true) {
 		return err
 	}
-	fmt.Printf("node %v has been placed in drain mode\n", nodeID)
+	logging.Info("node %v has been placed in drain mode\n", nodeID)
 
 	// Setup a ticker to poll the node allocations and report when all existing
 	// allocations have been migrated to other worker nodes.
@@ -355,7 +356,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	for {
 		select {
 		case <-timeout:
-			fmt.Printf("timeout %v reached while waiting for existing allocations to be migrated from node %v\n",
+			logging.Info("timeout %v reached while waiting for existing allocations to be migrated from node %v\n",
 				timeout, nodeID)
 			return nil
 		case <-ticker.C:
@@ -376,11 +377,11 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 			}
 
 			if activeAllocations == 0 {
-				fmt.Printf("node %v has no active allocations\n", nodeID)
+				logging.Info("node %v has no active allocations\n", nodeID)
 				return nil
 			}
 
-			fmt.Printf("node %v has %v active allocations, pausing and will re-poll allocations\n", nodeID, activeAllocations)
+			logging.Info("node %v has %v active allocations, pausing and will re-poll allocations\n", nodeID, activeAllocations)
 		}
 	}
 }

@@ -150,7 +150,6 @@ func CheckClusterScalingTimeThreshold(cooldown int, asgName string, svc *autosca
 	// based on UTC, and so the current time does the same.
 	timeThreshold := time.Now().UTC().Add(-time.Second * time.Duration(cooldown))
 	lastActivity := *resp.Activities[0].EndTime
-	fmt.Println(timeThreshold, lastActivity)
 
 	// Compare the two dates to see if the current time minus the cooldown is
 	// before the last scaling activity. If it was before, this indicates the
