@@ -1,0 +1,11 @@
+[Unit]
+Description=Replicator
+Documentation=https://github.com/elsevier-core-engineering/replicator
+
+[Service]
+ExecStart=/usr/local/bin/replicator
+SuccessExitStatus=13
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
