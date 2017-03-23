@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	metrics "github.com/armon/go-metrics"
 	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
@@ -18,6 +19,7 @@ const (
 	ExitCodeRunnerError
 	ExitCodeInterrupt
 	ExitCodeParseFlagsError
+	ExitCodeTelemtryError
 )
 
 // CLI is the main entry point for Consulate.
@@ -41,6 +43,16 @@ func (cli *CLI) Run(args []string) int {
 
 	// Set the logging level for the logger.
 	logging.SetLevel(c.LogLevel)
+
+	// Initialize telemetry if this was configured by the user.
+	if c.Telemetry.StatsdAddress != "" {
+		sink, statsErr := metrics.NewStatsdSink(c.Telemetry.StatsdAddress)
+		if statsErr != nil {
+			logging.Error("unable to setup telemetry correctly: %v", statsErr)
+			return ExitCodeTelemtryError
+		}
+		metrics.NewGlobal(metrics.DefaultConfig("replicator"), sink)
+	}
 
 	// Create the initial runner with the merged configuration parameters.
 	runner, err := NewRunner(c)
