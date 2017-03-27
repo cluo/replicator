@@ -33,10 +33,14 @@ type GroupScalingPolicy struct {
 	// GroupName is the jobs Group name which this scaling policy represents.
 	GroupName string `json:"name"`
 
+	// TaskResources is a list of
+	TaskResources []*TaskAllocation `json:"task_resources"`
+
 	// Scaling
 	Scaling *Scaling
 }
 
+// Scaling does stuff and things.
 type Scaling struct {
 	// Min in the minimum number of tasks the job should have running at any one
 	// time.

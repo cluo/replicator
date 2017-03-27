@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/dariubs/percent"
@@ -23,6 +24,12 @@ type NomadClient interface {
 	// DrainNode places a worker node in drain mode to stop future allocations and
 	// migrate existing allocations to other worker nodes.
 	DrainNode(string) error
+
+	//GetAllocationStats does stuff
+	GetAllocationStats(*nomad.Allocation)
+
+	// GetJobAllocations
+	GetJobAllocations([]*JobScalingPolicy)
 
 	// LeaderCheck determines if the node running replicator is the gossip pool
 	// leader.
@@ -92,6 +99,16 @@ type NodeAllocation struct {
 	// UsedCapacity represents the percentage of total cluster resources consumed by
 	// the worker node.
 	UsedCapacity AllocationResources
+}
+
+// TaskAllocation describes the resource requirements defined in the job specification.
+type TaskAllocation struct {
+	// TaskName is the name given to the task within the job specficiation.
+	TaskName string
+
+	// Resources tracks the resource requirements defined in the job spec and the
+	// real-time utilization of those resources.
+	Resources AllocationResources
 }
 
 // AllocationResources represents the allocation resource utilization.
@@ -440,6 +457,74 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
 	}
 
 	return nil
+}
+
+// GetTaskGroupResources finds the defined resource requirements for a
+// given
+func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupScalingPolicy) {
+	jobs, _, err := c.nomad.Jobs().Info(jobName, &nomad.QueryOptions{})
+	if err != nil {
+		fmt.Printf("failed to retrieve job details for job %v: %v\n", jobName, err)
+	}
+
+	for _, group := range jobs.TaskGroups {
+		for _, task := range group.Tasks {
+			alloc := &TaskAllocation{
+				TaskName: task.Name,
+				Resources: AllocationResources{
+					CPUMHz:   *task.Resources.CPU,
+					MemoryMB: *task.Resources.MemoryMB}}
+			groupPolicy.TaskResources = append(groupPolicy.TaskResources, alloc)
+			fmt.Printf("CPU: %v\n", *task.Resources.CPU)
+			// groupPolicy.Resources.CPUMHz = *task.Resources.CPU
+			// groupPolicy.Resources.MemoryMB = *task.Resources.MemoryMB
+		}
+	}
+}
+
+// GetJobAllocations identifies all allocations for an active job.
+func (c *nomadClient) GetJobAllocations(jobs []*JobScalingPolicy) {
+	for _, policy := range jobs {
+		for _, groupScalingPolicy := range policy.GroupScalingPolicies {
+			c.GetTaskGroupResources(policy.JobName, groupScalingPolicy)
+			for _, stuff := range groupScalingPolicy.TaskResources {
+				fmt.Printf("Task Name: %v, CPU: %v\n", stuff.TaskName, stuff.Resources.CPUMHz)
+			}
+		}
+
+		allocations, _, err := c.nomad.Jobs().Allocations(policy.JobName, false, &nomad.QueryOptions{})
+		if err != nil {
+			fmt.Printf("Failed to retrieve allocations for job %v\n", policy.JobName)
+		}
+
+		for _, allocationStub := range allocations {
+			if (allocationStub.ClientStatus == "running") && (allocationStub.DesiredStatus == "run") {
+				allocation, _, err := c.nomad.Allocations().Info(allocationStub.ID, &nomad.QueryOptions{})
+				if err != nil {
+					fmt.Printf("failed to retrieve full details for allocation %v: %v\n", allocationStub.ID, err)
+				}
+
+				fmt.Printf("Allocation ID %v is associated with job %v\n", allocationStub.ID, allocationStub.JobID)
+				fmt.Printf("Allocation ID %v is running on node %v\n", allocationStub.ID, allocationStub.NodeID)
+				c.GetAllocationStats(allocation)
+			}
+		}
+	}
+
+}
+
+// GetAllocationStats does stuff
+func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation) {
+	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
+	if err != nil {
+		fmt.Printf("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
+		return
+	}
+
+	cs := stats.ResourceUsage.CpuStats
+	//ms := stats.ResourceUsage.MemoryStats
+
+	fmt.Printf("Usage: %v\n", math.Floor(cs.TotalTicks))
 }
 
 // PercentageCapacityRequired accepts a number of cluster allocation parameters

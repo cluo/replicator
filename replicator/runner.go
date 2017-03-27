@@ -67,14 +67,18 @@ func (r *Runner) Start() {
 			}
 
 			scalingPolicies, _ := consulClient.ListConsulKV("", "replicator/config/jobs", r.config)
-
-			for _, policy := range scalingPolicies {
-				fmt.Println(policy.JobName)
-				fmt.Println(len(policy.GroupScalingPolicies))
-				for _, groupPolicy := range policy.GroupScalingPolicies {
-					fmt.Println(groupPolicy.Scaling.Max)
-				}
-			}
+			client.GetJobAllocations(scalingPolicies)
+			//
+			// for _, policy := range scalingPolicies {
+			// 	if policy.Enabled {
+			// 		fmt.Println(policy.JobName)
+			// 		fmt.Println(len(policy.GroupScalingPolicies))
+			//
+			// 		for _, groupPolicy := range policy.GroupScalingPolicies {
+			// 			fmt.Println(groupPolicy.Scaling.Max)
+			// 		}
+			// 	}
+			// }
 
 			target := client.LeastAllocatedNode(allocs)
 			fmt.Printf("Least Allocated Node: %v\n", target)
