@@ -32,9 +32,6 @@ type GroupScalingPolicy struct {
 	// GroupName is the jobs Group name which this scaling policy represents.
 	GroupName string `json:"name"`
 
-	// CurrentCount represents the current running number.
-	CurrentCount int `json:"current_count"`
-
 	// TaskResources is a list
 	Tasks TaskAllocation `json:"task_resources"`
 
