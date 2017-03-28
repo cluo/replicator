@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	metrics "github.com/armon/go-metrics"
+	"github.com/elsevier-core-engineering/replicator/config"
+	"github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
@@ -102,19 +104,19 @@ func (cli *CLI) Run(args []string) int {
 // setup asseses the CLI arguments, or lack of, and then iterates through
 // the load order sementics for the configuration to return a configuration
 // object.
-func (cli *CLI) setup(args []string) (*Config, error) {
+func (cli *CLI) setup(args []string) (*structs.Config, error) {
 
 	file := "/etc/consulate.d/consulate.hcl"
-	var c *Config
+	var c *structs.Config
 	var err error
 
 	// When no command line arguments are passed the default configuration file
 	// is initially checked for existance
 	if len(args) == 0 {
 		if _, er := os.Stat(file); os.IsNotExist(er) {
-			return DefaultConfig(), nil
+			return config.DefaultConfig(), nil
 		}
-		c, err = ParseConfig(file)
+		c, err = config.ParseConfig(file)
 		if err != nil {
 			return nil, fmt.Errorf("%v", err)
 		}
@@ -130,7 +132,7 @@ func (cli *CLI) setup(args []string) (*Config, error) {
 	// the right hand side used as the configuration file to parse.
 	if len(args) == 1 {
 		s := strings.Split(args[0], "=")
-		c, err = ParseConfig(s[1])
+		c, err = config.ParseConfig(s[1])
 
 		if err != nil {
 			return nil, fmt.Errorf("%v", err)

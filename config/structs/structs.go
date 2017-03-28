@@ -1,4 +1,4 @@
-package replicator
+package structs
 
 // Config is the main configuration struct used to configure the replicator
 // application.
@@ -30,7 +30,7 @@ type Config struct {
 	Telemetry *Telemetry `mapstructure:"telemetry"`
 
 	// setKeys is the list of config keys that were overridden by the user.
-	setKeys map[string]struct{}
+	SetKeys map[string]struct{}
 }
 
 // ClusterScaling is the configuration struct for the Nomad worker node scaling
@@ -68,4 +68,54 @@ type Telemetry struct {
 	// StatsdAddress specifies the address of a statsd server to forward metrics
 	// to and should include the port.
 	StatsdAddress string `mapstructure:"statsd_address"`
+}
+
+// WasSet determines if the given key was set by the user or uses the default
+// values.
+func (c *Config) WasSet(key string) bool {
+	if _, ok := c.SetKeys[key]; ok {
+		return true
+	}
+	return false
+}
+
+// Merge takes the user override parameters and merges these into the default
+// config parameters. User overrides will always take priority.
+func (c *Config) Merge(o *Config) {
+	if o.WasSet("consul") {
+		c.Consul = o.Consul
+	}
+	if o.WasSet("nomad") {
+		c.Nomad = o.Nomad
+	}
+	if o.WasSet("log_level") {
+		c.LogLevel = o.LogLevel
+	}
+	if o.WasSet("enforce") {
+		c.Enforce = o.Enforce
+	}
+	if o.WasSet("cluster_scaling") {
+		if o.WasSet("cluster_scaling.max_size") {
+			c.ClusterScaling.MaxSize = o.ClusterScaling.MaxSize
+		}
+		if o.WasSet("cluster_scaling.min_size") {
+			c.ClusterScaling.MinSize = o.ClusterScaling.MinSize
+		}
+		if o.WasSet("cluster_scaling.cool_down") {
+			c.ClusterScaling.CoolDown = o.ClusterScaling.CoolDown
+		}
+	}
+	if o.WasSet("job_scaling") {
+		if o.WasSet("job_scaling.consul_token") {
+			c.JobScaling.ConsulToken = o.JobScaling.ConsulToken
+		}
+		if o.WasSet("job_scaling.consul_key_location") {
+			c.JobScaling.ConsulKeyLocation = o.JobScaling.ConsulKeyLocation
+		}
+	}
+	if o.WasSet("telemetry") {
+		if o.WasSet("telemetry.statsd_address") {
+			c.Telemetry.StatsdAddress = o.Telemetry.StatsdAddress
+		}
+	}
 }

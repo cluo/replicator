@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/dariubs/percent"
@@ -24,6 +25,17 @@ type NomadClient interface {
 	// DrainNode places a worker node in drain mode to stop future allocations and
 	// migrate existing allocations to other worker nodes.
 	DrainNode(string) error
+
+	// EvaluateJobScaling compares the consumed resource percentages of a Job group
+	// against its scaling policy to determine whether a scaling event is required.
+	EvaluateJobScaling([]*JobScalingPolicy)
+
+	// GetAllocationStats discovers the resources consumed by a particular Nomad
+	// allocation.
+	GetAllocationStats(*nomad.Allocation, *GroupScalingPolicy)
+
+	// GetJobAllocations identifies all allocations for an active job.
+	GetJobAllocations([]*nomad.AllocationListStub, *GroupScalingPolicy)
 
 	// LeaderCheck determines if the node running replicator is the gossip pool
 	// leader.
@@ -53,6 +65,15 @@ const (
 	ScalingMetricMemory    = "Memory"
 	ScalingMetricProcessor = "CPU"
 )
+
+// Scaling direction types indicate the allowed scaling actions.
+const (
+	ScalingDirectionOut  = "Out"
+	ScalingDirectionIn   = "In"
+	ScalingDirectionNone = "None"
+)
+
+const bytesPerMegabyte = 1024000
 
 // ClusterAllocation is the central object used to track cluster status and the data
 // required to make scaling decisions.
@@ -93,6 +114,16 @@ type NodeAllocation struct {
 	// UsedCapacity represents the percentage of total cluster resources consumed by
 	// the worker node.
 	UsedCapacity AllocationResources
+}
+
+// TaskAllocation describes the resource requirements defined in the job specification.
+type TaskAllocation struct {
+	// TaskName is the name given to the task within the job specficiation.
+	TaskName string
+
+	// Resources tracks the resource requirements defined in the job spec and the
+	// real-time utilization of those resources.
+	Resources AllocationResources
 }
 
 // AllocationResources represents the allocation resource utilization.
@@ -301,6 +332,20 @@ func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
 	}
 }
 
+// MostUtilizedGroupResource determines whether CPU or Mem are the most utilized
+// resource of a Group.
+func (c *nomadClient) MostUtilizedGroupResource(gsp *GroupScalingPolicy) {
+	max := (helper.Max(gsp.Tasks.Resources.CPUPercent,
+		gsp.Tasks.Resources.MemoryPercent))
+
+	switch max {
+	case gsp.Tasks.Resources.CPUPercent:
+		gsp.ScalingMetric = ScalingMetricProcessor
+	case gsp.Tasks.Resources.MemoryPercent:
+		gsp.ScalingMetric = ScalingMetricMemory
+	}
+}
+
 // LeastAllocatedNode determines which worker node is consuming the lowest percentage of the
 // resource identified as the most-utilized resource across the cluster. Since Nomad follows
 // a bin-packing approach, when we need to remove a worker node in response to a scale-in
@@ -443,6 +488,86 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
 	}
 
 	return nil
+}
+
+// GetTaskGroupResources finds the defined resource requirements for a
+// given
+func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupScalingPolicy) {
+	jobs, _, err := c.nomad.Jobs().Info(jobName, &nomad.QueryOptions{})
+	if err != nil {
+		fmt.Printf("failed to retrieve job details for job %v: %v\n", jobName, err)
+	}
+
+	for _, group := range jobs.TaskGroups {
+		for _, task := range group.Tasks {
+			groupPolicy.Tasks.Resources.CPUMHz += *task.Resources.CPU
+			groupPolicy.Tasks.Resources.MemoryMB += *task.Resources.MemoryMB
+		}
+	}
+}
+
+// EvaluateJobScaling identifies Nomad allocations representative of a Job group
+// and compares the consumed resource percentages against the scaling policy to
+// determine whether a scaling event is required.
+func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
+	for _, policy := range jobs {
+		for _, gsp := range policy.GroupScalingPolicies {
+			c.GetTaskGroupResources(policy.JobName, gsp)
+
+			allocs, _, err := c.nomad.Jobs().Allocations(policy.JobName, false, &nomad.QueryOptions{})
+			if err != nil {
+				fmt.Printf("failed to retrieve allocations for job %v: %v\n", policy.JobName, err)
+			}
+
+			c.GetJobAllocations(allocs, gsp)
+			c.MostUtilizedGroupResource(gsp)
+
+			switch gsp.ScalingMetric {
+			case ScalingMetricProcessor:
+				if gsp.Tasks.Resources.CPUPercent > gsp.Scaling.ScaleOut.CPU {
+					gsp.Scaling.ScaleDirection = ScalingDirectionOut
+				}
+			case ScalingMetricMemory:
+				if gsp.Tasks.Resources.MemoryPercent > gsp.Scaling.ScaleOut.MEM {
+					gsp.Scaling.ScaleDirection = ScalingDirectionOut
+				}
+			}
+
+			if (gsp.Tasks.Resources.CPUPercent < gsp.Scaling.ScaleIn.CPU) &&
+				(gsp.Tasks.Resources.MemoryPercent < gsp.Scaling.ScaleIn.MEM) {
+				gsp.Scaling.ScaleDirection = ScalingDirectionIn
+			}
+		}
+	}
+}
+
+// GetJobAllocations identifies all allocations for an active job.
+func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp *GroupScalingPolicy) {
+	for _, allocationStub := range allocs {
+		if (allocationStub.ClientStatus == "running") && (allocationStub.DesiredStatus == "run") {
+			if alloc, _, err := c.nomad.Allocations().Info(allocationStub.ID, &nomad.QueryOptions{}); err == nil && alloc != nil {
+				c.GetAllocationStats(alloc, gsp)
+			}
+		}
+	}
+}
+
+// GetAllocationStats discovers the resources consumed by a particular Nomad
+// allocation.
+func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *GroupScalingPolicy) {
+	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
+	if err != nil {
+		fmt.Printf("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
+		return
+	}
+
+	cs := stats.ResourceUsage.CpuStats
+	ms := stats.ResourceUsage.MemoryStats
+
+	scalingPolicy.Tasks.Resources.CPUPercent = percent.PercentOf(int(math.Floor(cs.TotalTicks)),
+		scalingPolicy.Tasks.Resources.CPUMHz)
+	scalingPolicy.Tasks.Resources.MemoryPercent = percent.PercentOf(int((ms.RSS / bytesPerMegabyte)),
+		scalingPolicy.Tasks.Resources.MemoryMB)
 }
 
 // PercentageCapacityRequired accepts a number of cluster allocation parameters

@@ -1,34 +1,35 @@
-package replicator
+package config
 
 import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/elsevier-core-engineering/replicator/config/structs"
 	conf "github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/hcl"
 	"github.com/mitchellh/mapstructure"
 )
 
 // DefaultConfig returns a default configuration struct with sane defaults.
-func DefaultConfig() *Config {
+func DefaultConfig() *structs.Config {
 
-	return &Config{
+	return &structs.Config{
 		Consul:   "localhost:8500",
 		Nomad:    "http://localhost:4646",
 		LogLevel: "INFO",
 		Enforce:  true,
 
-		ClusterScaling: &ClusterScaling{
+		ClusterScaling: &structs.ClusterScaling{
 			MaxSize:  10,
 			MinSize:  5,
 			CoolDown: 300,
 		},
 
-		JobScaling: &JobScaling{
+		JobScaling: &structs.JobScaling{
 			ConsulKeyLocation: "replicator/config/jobs",
 		},
 
-		Telemetry: &Telemetry{},
+		Telemetry: &structs.Telemetry{},
 	}
 }
 
@@ -36,7 +37,7 @@ func DefaultConfig() *Config {
 // Config struct with the data populated. The returned data is a merge of the
 // user specified parameters and defaults with the user provided params always
 // taking precident.
-func ParseConfig(path string) (*Config, error) {
+func ParseConfig(path string) (*structs.Config, error) {
 
 	// Read the configuration file
 	contents, err := ioutil.ReadFile(path)
@@ -57,7 +58,7 @@ func ParseConfig(path string) (*Config, error) {
 	flattenKeys(parsed, []string{"job_scaling"})
 	flattenKeys(parsed, []string{"telemetry"})
 
-	c := new(Config)
+	c := new(structs.Config)
 
 	// Using mapstrcuture we populate the user defined population feilds.
 	metadata := new(mapstructure.Metadata)
@@ -75,12 +76,12 @@ func ParseConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	if c.setKeys == nil {
-		c.setKeys = make(map[string]struct{})
+	if c.SetKeys == nil {
+		c.SetKeys = make(map[string]struct{})
 	}
 	for _, key := range metadata.Keys {
-		if _, ok := c.setKeys[key]; !ok {
-			c.setKeys[key] = struct{}{}
+		if _, ok := c.SetKeys[key]; !ok {
+			c.SetKeys[key] = struct{}{}
 		}
 	}
 
@@ -91,56 +92,6 @@ func ParseConfig(path string) (*Config, error) {
 	c = d
 
 	return c, nil
-}
-
-// Merge takes the user override parameters and merges these into the default
-// config parameters. User overrides will always take priority.
-func (c *Config) Merge(o *Config) {
-	if o.WasSet("consul") {
-		c.Consul = o.Consul
-	}
-	if o.WasSet("nomad") {
-		c.Nomad = o.Nomad
-	}
-	if o.WasSet("log_level") {
-		c.LogLevel = o.LogLevel
-	}
-	if o.WasSet("enforce") {
-		c.Enforce = o.Enforce
-	}
-	if o.WasSet("cluster_scaling") {
-		if o.WasSet("cluster_scaling.max_size") {
-			c.ClusterScaling.MaxSize = o.ClusterScaling.MaxSize
-		}
-		if o.WasSet("cluster_scaling.min_size") {
-			c.ClusterScaling.MinSize = o.ClusterScaling.MinSize
-		}
-		if o.WasSet("cluster_scaling.cool_down") {
-			c.ClusterScaling.CoolDown = o.ClusterScaling.CoolDown
-		}
-	}
-	if o.WasSet("job_scaling") {
-		if o.WasSet("job_scaling.consul_token") {
-			c.JobScaling.ConsulToken = o.JobScaling.ConsulToken
-		}
-		if o.WasSet("job_scaling.consul_key_location") {
-			c.JobScaling.ConsulKeyLocation = o.JobScaling.ConsulKeyLocation
-		}
-	}
-	if o.WasSet("telemetry") {
-		if o.WasSet("telemetry.statsd_address") {
-			c.Telemetry.StatsdAddress = o.Telemetry.StatsdAddress
-		}
-	}
-}
-
-// WasSet determines if the given key was set by the user or uses the default
-// values.
-func (c *Config) WasSet(key string) bool {
-	if _, ok := c.setKeys[key]; ok {
-		return true
-	}
-	return false
 }
 
 // flattenKeys is a function that takes a map[string]interface{} and recursively

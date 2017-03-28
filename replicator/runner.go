@@ -1,9 +1,11 @@
 package replicator
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
+	config "github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
@@ -14,11 +16,11 @@ type Runner struct {
 
 	// config is the Config that created this Runner. It is used internally to
 	// construct other objects and pass data.
-	config *Config
+	config *config.Config
 }
 
 // NewRunner sets up the Runner type.
-func NewRunner(config *Config) (*Runner, error) {
+func NewRunner(config *config.Config) (*Runner, error) {
 	runner := &Runner{
 		doneChan: make(chan struct{}),
 		config:   config,
@@ -37,6 +39,8 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 			client, _ := api.NewNomadClient(r.config.Nomad)
+			consulClient, _ := api.NewConsulClient(r.config.Consul)
+
 			allocs := &api.ClusterAllocation{}
 
 			client.ClusterAllocationCapacity(allocs)
@@ -61,6 +65,17 @@ func (r *Runner) Start() {
 			logging.Info("Disk: %v %v", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
 			if client.LeaderCheck() {
 				logging.Info("We have cluster leadership.")
+			}
+
+			scalingPolicies, _ := consulClient.ListConsulKV("", "replicator/config/jobs", r.config)
+			client.EvaluateJobScaling(scalingPolicies)
+
+			for _, sp := range scalingPolicies {
+				for _, gsp := range sp.GroupScalingPolicies {
+					fmt.Printf("Group Name: %v, Scaling Metric: %v\n", gsp.GroupName, gsp.ScalingMetric)
+					fmt.Printf("Group Name: %v, CPU: %v, Memory: %v\n", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
+						gsp.Tasks.Resources.MemoryPercent)
+				}
 			}
 
 			target := client.LeastAllocatedNode(allocs)
