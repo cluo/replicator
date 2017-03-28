@@ -34,7 +34,10 @@ type GroupScalingPolicy struct {
 	GroupName string `json:"name"`
 
 	// TaskResources is a list of
-	TaskResources []*TaskAllocation `json:"task_resources"`
+	Tasks TaskAllocation `json:"task_resources"`
+
+	// ScalingMetric represents the most-utilized resource within the task group.
+	ScalingMetric string
 
 	// Scaling
 	Scaling *Scaling
@@ -50,7 +53,7 @@ type Scaling struct {
 	// time.
 	Max int `json:"max"`
 
-	// ScaleDirection is populated by either up/down depending on the evalution
+	// ScaleDirection is populated by either out/in/none depending on the evalution
 	// of a scaling event happening.
 	ScaleDirection string
 
@@ -64,13 +67,13 @@ type Scaling struct {
 }
 
 type scaleout struct {
-	CPU int `json:"cpu"`
-	MEM int `json:"mem"`
+	CPU float64 `json:"cpu"`
+	MEM float64 `json:"mem"`
 }
 
 type scalein struct {
-	CPU int `json:"cpu"`
-	MEM int `json:"mem"`
+	CPU float64 `json:"cpu"`
+	MEM float64 `json:"mem"`
 }
 
 // The Client interface is used to provide common method signatures for

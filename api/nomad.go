@@ -25,11 +25,14 @@ type NomadClient interface {
 	// migrate existing allocations to other worker nodes.
 	DrainNode(string) error
 
+	// EvaluateJobScaling
+	EvaluateJobScaling([]*JobScalingPolicy)
+
 	//GetAllocationStats does stuff
-	GetAllocationStats(*nomad.Allocation)
+	GetAllocationStats(*nomad.Allocation, *GroupScalingPolicy)
 
 	// GetJobAllocations
-	GetJobAllocations([]*JobScalingPolicy)
+	GetJobAllocations([]*nomad.AllocationListStub, *GroupScalingPolicy)
 
 	// LeaderCheck determines if the node running replicator is the gossip pool
 	// leader.
@@ -59,6 +62,15 @@ const (
 	ScalingMetricMemory    = "Memory"
 	ScalingMetricProcessor = "CPU"
 )
+
+// Scaling direction types indicate the allowed scaling actions.
+const (
+	ScalingDirectionOut  = "Out"
+	ScalingDirectionIn   = "In"
+	ScalingDirectionNone = "None"
+)
+
+const bytesPerMegabyte = 1024000
 
 // ClusterAllocation is the central object used to track cluster status and the data
 // required to make scaling decisions.
@@ -317,6 +329,18 @@ func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
 	}
 }
 
+func (c *nomadClient) MostUtilizedGroupResource(gsp *GroupScalingPolicy) {
+	max := (helper.Max(gsp.Tasks.Resources.CPUPercent,
+		gsp.Tasks.Resources.MemoryPercent))
+
+	switch max {
+	case gsp.Tasks.Resources.CPUPercent:
+		gsp.ScalingMetric = ScalingMetricProcessor
+	case gsp.Tasks.Resources.MemoryPercent:
+		gsp.ScalingMetric = ScalingMetricMemory
+	}
+}
+
 // LeastAllocatedNode determines which worker node is consuming the lowest percentage of the
 // resource identified as the most-utilized resource across the cluster. Since Nomad follows
 // a bin-packing approach, when we need to remove a worker node in response to a scale-in
@@ -469,52 +493,57 @@ func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupSc
 
 	for _, group := range jobs.TaskGroups {
 		for _, task := range group.Tasks {
-			alloc := &TaskAllocation{
-				TaskName: task.Name,
-				Resources: AllocationResources{
-					CPUMHz:   *task.Resources.CPU,
-					MemoryMB: *task.Resources.MemoryMB}}
-			groupPolicy.TaskResources = append(groupPolicy.TaskResources, alloc)
-			fmt.Printf("CPU: %v\n", *task.Resources.CPU)
-			// groupPolicy.Resources.CPUMHz = *task.Resources.CPU
-			// groupPolicy.Resources.MemoryMB = *task.Resources.MemoryMB
+			groupPolicy.Tasks.Resources.CPUMHz += *task.Resources.CPU
+			groupPolicy.Tasks.Resources.MemoryMB += *task.Resources.MemoryMB
+		}
+	}
+}
+
+func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
+	for _, policy := range jobs {
+		for _, gsp := range policy.GroupScalingPolicies {
+			c.GetTaskGroupResources(policy.JobName, gsp)
+
+			allocs, _, err := c.nomad.Jobs().Allocations(policy.JobName, false, &nomad.QueryOptions{})
+			if err != nil {
+				fmt.Printf("failed to retrieve allocations for job %v: %v\n", policy.JobName, err)
+			}
+
+			c.GetJobAllocations(allocs, gsp)
+			c.MostUtilizedGroupResource(gsp)
+
+			switch gsp.ScalingMetric {
+			case ScalingMetricProcessor:
+				if gsp.Tasks.Resources.CPUPercent > gsp.Scaling.ScaleOut.CPU {
+					gsp.Scaling.ScaleDirection = ScalingDirectionOut
+				}
+			case ScalingMetricMemory:
+				if gsp.Tasks.Resources.MemoryPercent > gsp.Scaling.ScaleOut.MEM {
+					gsp.Scaling.ScaleDirection = ScalingDirectionOut
+				}
+			}
+
+			if (gsp.Tasks.Resources.CPUPercent < gsp.Scaling.ScaleIn.CPU) &&
+				(gsp.Tasks.Resources.MemoryPercent < gsp.Scaling.ScaleIn.MEM) {
+				gsp.Scaling.ScaleDirection = ScalingDirectionIn
+			}
 		}
 	}
 }
 
 // GetJobAllocations identifies all allocations for an active job.
-func (c *nomadClient) GetJobAllocations(jobs []*JobScalingPolicy) {
-	for _, policy := range jobs {
-		for _, groupScalingPolicy := range policy.GroupScalingPolicies {
-			c.GetTaskGroupResources(policy.JobName, groupScalingPolicy)
-			for _, stuff := range groupScalingPolicy.TaskResources {
-				fmt.Printf("Task Name: %v, CPU: %v\n", stuff.TaskName, stuff.Resources.CPUMHz)
-			}
-		}
-
-		allocations, _, err := c.nomad.Jobs().Allocations(policy.JobName, false, &nomad.QueryOptions{})
-		if err != nil {
-			fmt.Printf("Failed to retrieve allocations for job %v\n", policy.JobName)
-		}
-
-		for _, allocationStub := range allocations {
-			if (allocationStub.ClientStatus == "running") && (allocationStub.DesiredStatus == "run") {
-				allocation, _, err := c.nomad.Allocations().Info(allocationStub.ID, &nomad.QueryOptions{})
-				if err != nil {
-					fmt.Printf("failed to retrieve full details for allocation %v: %v\n", allocationStub.ID, err)
-				}
-
-				fmt.Printf("Allocation ID %v is associated with job %v\n", allocationStub.ID, allocationStub.JobID)
-				fmt.Printf("Allocation ID %v is running on node %v\n", allocationStub.ID, allocationStub.NodeID)
-				c.GetAllocationStats(allocation)
+func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp *GroupScalingPolicy) {
+	for _, allocationStub := range allocs {
+		if (allocationStub.ClientStatus == "running") && (allocationStub.DesiredStatus == "run") {
+			if alloc, _, err := c.nomad.Allocations().Info(allocationStub.ID, &nomad.QueryOptions{}); err == nil && alloc != nil {
+				c.GetAllocationStats(alloc, gsp)
 			}
 		}
 	}
-
 }
 
 // GetAllocationStats does stuff
-func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation) {
+func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *GroupScalingPolicy) {
 	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
 	if err != nil {
 		fmt.Printf("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
@@ -522,9 +551,12 @@ func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation) {
 	}
 
 	cs := stats.ResourceUsage.CpuStats
-	//ms := stats.ResourceUsage.MemoryStats
+	ms := stats.ResourceUsage.MemoryStats
 
-	fmt.Printf("Usage: %v\n", math.Floor(cs.TotalTicks))
+	scalingPolicy.Tasks.Resources.CPUPercent = percent.PercentOf(int(math.Floor(cs.TotalTicks)),
+		scalingPolicy.Tasks.Resources.CPUMHz)
+	scalingPolicy.Tasks.Resources.MemoryPercent = percent.PercentOf(int((ms.RSS / bytesPerMegabyte)),
+		scalingPolicy.Tasks.Resources.MemoryMB)
 }
 
 // PercentageCapacityRequired accepts a number of cluster allocation parameters
