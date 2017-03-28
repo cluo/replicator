@@ -1,7 +1,6 @@
 package replicator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
@@ -72,8 +71,8 @@ func (r *Runner) Start() {
 
 			for _, sp := range scalingPolicies {
 				for _, gsp := range sp.GroupScalingPolicies {
-					fmt.Printf("Group Name: %v, Scaling Metric: %v\n", gsp.GroupName, gsp.ScalingMetric)
-					fmt.Printf("Group Name: %v, CPU: %v, Memory: %v\n", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
+					logging.Info("Group Name: %v, Scaling Metric: %v\n", gsp.GroupName, gsp.ScalingMetric)
+					logging.Info("Group Name: %v, CPU: %v, Memory: %v\n", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
 						gsp.Tasks.Resources.MemoryPercent)
 				}
 			}
