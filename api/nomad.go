@@ -26,13 +26,15 @@ type NomadClient interface {
 	// migrate existing allocations to other worker nodes.
 	DrainNode(string) error
 
-	// EvaluateJobScaling
+	// EvaluateJobScaling compares the consumed resource percentages of a Job group
+	// against its scaling policy to determine whether a scaling event is required.
 	EvaluateJobScaling([]*JobScalingPolicy)
 
-	//GetAllocationStats does stuff
+	// GetAllocationStats discovers the resources consumed by a particular Nomad
+	// allocation.
 	GetAllocationStats(*nomad.Allocation, *GroupScalingPolicy)
 
-	// GetJobAllocations
+	// GetJobAllocations identifies all allocations for an active job.
 	GetJobAllocations([]*nomad.AllocationListStub, *GroupScalingPolicy)
 
 	// LeaderCheck determines if the node running replicator is the gossip pool
@@ -330,6 +332,8 @@ func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
 	}
 }
 
+// MostUtilizedGroupResource determines whether CPU or Mem are the most utilized
+// resource of a Group.
 func (c *nomadClient) MostUtilizedGroupResource(gsp *GroupScalingPolicy) {
 	max := (helper.Max(gsp.Tasks.Resources.CPUPercent,
 		gsp.Tasks.Resources.MemoryPercent))
@@ -502,6 +506,9 @@ func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupSc
 	}
 }
 
+// EvaluateJobScaling identifies Nomad allocations representative of a Job group
+// and compares the consumed resource percentages against the scaling policy to
+// determine whether a scaling event is required.
 func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
 	for _, policy := range jobs {
 		for _, gsp := range policy.GroupScalingPolicies {
@@ -545,7 +552,8 @@ func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp 
 	}
 }
 
-// GetAllocationStats does stuff
+// GetAllocationStats discovers the resources consumed by a particular Nomad
+// allocation.
 func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *GroupScalingPolicy) {
 	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
 	if err != nil {

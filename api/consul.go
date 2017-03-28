@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	config "github.com/elsevier-core-engineering/replicator/config/structs"
@@ -39,11 +38,13 @@ type GroupScalingPolicy struct {
 	// ScalingMetric represents the most-utilized resource within the task group.
 	ScalingMetric string
 
-	// Scaling
+	// Scaling is a list of Scaling objects.
 	Scaling *Scaling
 }
 
-// Scaling does stuff and things.
+// Scaling struct represents the scaling policy of a Nomad Job Group as well as
+// details of any scaling activities which should take place during the current
+// deamon run.
 type Scaling struct {
 	// Min in the minimum number of tasks the job should have running at any one
 	// time.
@@ -142,6 +143,5 @@ func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Confi
 		entries = append(entries, s)
 	}
 
-	fmt.Println(entries[0].JobName)
 	return entries, nil
 }
