@@ -7,10 +7,9 @@ import (
 	"strings"
 	"syscall"
 
-
+	metrics "github.com/armon/go-metrics"
 	"github.com/elsevier-core-engineering/replicator/config"
 	"github.com/elsevier-core-engineering/replicator/config/structs"
-	metrics "github.com/armon/go-metrics"
 	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
