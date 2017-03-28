@@ -67,6 +67,7 @@ func (r *Runner) Start() {
 			}
 
 			scalingPolicies, _ := consulClient.ListConsulKV("", "replicator/config/jobs", r.config)
+			logging.Info("%v", scalingPolicies)
 			client.EvaluateJobScaling(scalingPolicies)
 
 			for _, sp := range scalingPolicies {

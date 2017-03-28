@@ -50,6 +50,10 @@ type NomadClient interface {
 	// scaling decisions.
 	MostUtilizedResource(*ClusterAllocation)
 
+	// IsJobRunning checks to see whether the specified jobID has any currently
+	// task groups on the cluster.
+	IsJobRunning(string) bool
+
 	// TaskAllocationTotals calculates the allocations required by each running
 	// job and what amount of resources required if we increased the count of
 	// each job by one. This allows the cluster to proactively ensure it has
@@ -568,6 +572,19 @@ func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPo
 		scalingPolicy.Tasks.Resources.CPUMHz)
 	scalingPolicy.Tasks.Resources.MemoryPercent = percent.PercentOf(int((ms.RSS / bytesPerMegabyte)),
 		scalingPolicy.Tasks.Resources.MemoryMB)
+}
+
+// IsJobRunning checks to see whether the specified jobID has any currently
+// task groups on the cluster.
+func (c *nomadClient) IsJobRunning(jobID string) bool {
+
+	_, _, err := c.nomad.Jobs().Summary(jobID, &nomad.QueryOptions{})
+
+	if err != nil {
+		return false
+	}
+
+	return true
 }
 
 // PercentageCapacityRequired accepts a number of cluster allocation parameters

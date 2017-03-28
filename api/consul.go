@@ -128,6 +128,11 @@ func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Confi
 		return entries, err
 	}
 
+	nomadC, err := NewNomadClient(config.Nomad)
+	if err != nil {
+		return entries, err
+	}
+
 	// Loop the returned list to gather information on each and every job that has
 	// a scaling document.
 	for _, job := range resp {
@@ -141,9 +146,14 @@ func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Confi
 		// Trim the Key and its trailing slash to find the job name.
 		s.JobName = strings.TrimPrefix(job.Key, keyLocation+"/")
 
-		// Each scaling policy document is then appended to a list to form a full
-		// view of all scaling documents available to the cluster.
-		entries = append(entries, s)
+		// Check to see whether the scaling document is enabled and the job has
+		// running task groups before appending to the return.
+		if s.Enabled && nomadC.IsJobRunning(s.JobName) {
+
+			// Each scaling policy document is then appended to a list to form a full
+			// view of all scaling documents available to the cluster.
+			entries = append(entries, s)
+		}
 	}
 
 	return entries, nil
