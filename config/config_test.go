@@ -19,9 +19,10 @@ func TestParseConfig_correctDefaulValues(t *testing.T) {
 		Enforce:  true,
 
 		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:  10,
-			MinSize:  5,
-			CoolDown: 300,
+			MaxSize:            10,
+			MinSize:            5,
+			CoolDown:           300,
+			NodeFaultTolerance: 1,
 		},
 
 		JobScaling: &structs.JobScaling{
@@ -59,9 +60,10 @@ func TestParseConfig_correctNestedPartialOverride(t *testing.T) {
 		Enforce:  true,
 
 		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:  15,
-			MinSize:  5,
-			CoolDown: 300,
+			MaxSize:            15,
+			MinSize:            5,
+			CoolDown:           300,
+			NodeFaultTolerance: 1,
 		},
 
 		JobScaling: &structs.JobScaling{
@@ -83,9 +85,10 @@ func TestParseConfig_correctFullOverride(t *testing.T) {
     enforce   = false
 
     cluster_scaling {
-      max_size  = 1000
-      min_size  = 100
-			cool_down = 100
+      max_size             = 1000
+      min_size             = 100
+			cool_down            = 100
+			node_fault_tolerance = 50
     }
 
     job_scaling {
@@ -112,9 +115,10 @@ func TestParseConfig_correctFullOverride(t *testing.T) {
 		Enforce:  false,
 
 		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:  1000,
-			MinSize:  100,
-			CoolDown: 100,
+			MaxSize:            1000,
+			MinSize:            100,
+			CoolDown:           100,
+			NodeFaultTolerance: 50,
 		},
 
 		JobScaling: &structs.JobScaling{

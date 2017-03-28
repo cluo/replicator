@@ -20,9 +20,10 @@ func DefaultConfig() *structs.Config {
 		Enforce:  true,
 
 		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:  10,
-			MinSize:  5,
-			CoolDown: 300,
+			MaxSize:            10,
+			MinSize:            5,
+			CoolDown:           300,
+			NodeFaultTolerance: 1,
 		},
 
 		JobScaling: &structs.JobScaling{

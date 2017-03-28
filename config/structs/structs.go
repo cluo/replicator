@@ -48,6 +48,10 @@ type ClusterScaling struct {
 	// CoolDown is the number of seconds after a scaling activity completes before
 	// another can begin.
 	CoolDown float64 `mapstructure:"cool_down"`
+
+	// NodeFaultTolerance is the number of Nomad worker nodes the cluster can
+	// support losing, whilst still maintaining all existing workload.
+	NodeFaultTolerance int `mapstructure:"node_fault_tolerance"`
 }
 
 // JobScaling is the configuration struct for the Nomad job scaling activities.
@@ -103,6 +107,9 @@ func (c *Config) Merge(o *Config) {
 		}
 		if o.WasSet("cluster_scaling.cool_down") {
 			c.ClusterScaling.CoolDown = o.ClusterScaling.CoolDown
+		}
+		if o.WasSet("cluster_scaling.node_fault_tolerance") {
+			c.ClusterScaling.NodeFaultTolerance = o.ClusterScaling.NodeFaultTolerance
 		}
 	}
 	if o.WasSet("job_scaling") {
