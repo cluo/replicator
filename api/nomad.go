@@ -491,11 +491,11 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
 }
 
 // GetTaskGroupResources finds the defined resource requirements for a
-// given
+// given Job.
 func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupScalingPolicy) {
 	jobs, _, err := c.nomad.Jobs().Info(jobName, &nomad.QueryOptions{})
 	if err != nil {
-		fmt.Printf("failed to retrieve job details for job %v: %v\n", jobName, err)
+		logging.Error("failed to retrieve job details for job %v: %v\n", jobName, err)
 	}
 
 	for _, group := range jobs.TaskGroups {
@@ -516,7 +516,7 @@ func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
 
 			allocs, _, err := c.nomad.Jobs().Allocations(policy.JobName, false, &nomad.QueryOptions{})
 			if err != nil {
-				fmt.Printf("failed to retrieve allocations for job %v: %v\n", policy.JobName, err)
+				logging.Error("failed to retrieve allocations for job %v: %v\n", policy.JobName, err)
 			}
 
 			c.GetJobAllocations(allocs, gsp)
@@ -557,7 +557,7 @@ func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp 
 func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *GroupScalingPolicy) {
 	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
 	if err != nil {
-		fmt.Printf("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
+		logging.Error("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
 		return
 	}
 
