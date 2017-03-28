@@ -1,7 +1,11 @@
 sudo: false
+dist: trusty
 language: go
 go:
   - 1.8
+before_script:
+  - wget https://releases.hashicorp.com/consul/0.7.5/consul_0.7.5_linux_amd64.zip
+  - unzip -d $GOPATH/bin consul_0.7.5_linux_amd64.zip
 install:
   - go get github.com/golang/lint/golint
   - go get github.com/mitchellh/gox

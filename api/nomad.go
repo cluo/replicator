@@ -7,6 +7,7 @@ import (
 
 	"github.com/dariubs/percent"
 	"github.com/elsevier-core-engineering/replicator/helper"
+	"github.com/elsevier-core-engineering/replicator/logging"
 	nomad "github.com/hashicorp/nomad/api"
 )
 
@@ -242,7 +243,7 @@ func CalculateUsage(clusterInfo *ClusterAllocation) {
 	for _, nodeUsage := range clusterInfo.NodeAllocations {
 		nodeUsage.UsedCapacity.CPUPercent = percent.PercentOf(nodeUsage.UsedCapacity.CPUMHz,
 			clusterInfo.UsedCapacity.CPUMHz)
-		fmt.Printf("Node Used: %v (%v), Cluster Used: %v\n", nodeUsage.UsedCapacity.CPUMHz, nodeUsage.UsedCapacity.CPUPercent, clusterInfo.UsedCapacity.CPUMHz)
+		logging.Debug("Node Used: %v (%v), Cluster Used: %v\n", nodeUsage.UsedCapacity.CPUMHz, nodeUsage.UsedCapacity.CPUPercent, clusterInfo.UsedCapacity.CPUMHz)
 		nodeUsage.UsedCapacity.DiskPercent = percent.PercentOf(nodeUsage.UsedCapacity.DiskMB,
 			clusterInfo.UsedCapacity.DiskMB)
 		nodeUsage.UsedCapacity.MemoryPercent = percent.PercentOf(nodeUsage.UsedCapacity.MemoryMB,
@@ -256,12 +257,12 @@ func (c *nomadClient) LeaderCheck() bool {
 
 	leader, err := c.nomad.Status().Leader()
 	if (err != nil) || (len(leader) == 0) {
-		fmt.Printf("replicator: failed to identify cluster leader")
+		logging.Error("replicator: failed to identify cluster leader")
 	}
 
 	self, err := c.nomad.Agent().Self()
 	if err != nil {
-		fmt.Printf("replicator: unable to retrieve local agent information")
+		logging.Error("replicator: unable to retrieve local agent information")
 	} else {
 
 		if helper.FindIP(leader) == self.Member.Addr {
@@ -386,7 +387,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	if (err != nil) || (resp.Drain != true) {
 		return err
 	}
-	fmt.Printf("node %v has been placed in drain mode\n", nodeID)
+	logging.Info("node %v has been placed in drain mode\n", nodeID)
 
 	// Setup a ticker to poll the node allocations and report when all existing
 	// allocations have been migrated to other worker nodes.
@@ -396,7 +397,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	for {
 		select {
 		case <-timeout:
-			fmt.Printf("timeout %v reached while waiting for existing allocations to be migrated from node %v\n",
+			logging.Info("timeout %v reached while waiting for existing allocations to be migrated from node %v\n",
 				timeout, nodeID)
 			return nil
 		case <-ticker.C:
@@ -417,16 +418,16 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 			}
 
 			if activeAllocations == 0 {
-				fmt.Printf("node %v has no active allocations\n", nodeID)
+				logging.Info("node %v has no active allocations\n", nodeID)
 				return nil
 			}
 
-			fmt.Printf("node %v has %v active allocations, pausing and will re-poll allocations\n", nodeID, activeAllocations)
+			logging.Info("node %v has %v active allocations, pausing and will re-poll allocations\n", nodeID, activeAllocations)
 		}
 	}
 }
 
-// JobScale takes a Scaling Policy and thten attempts to scale the desired job
+// JobScale takes a Scaling Policy and then attempts to scale the desired job
 // to the appropriate level whilst ensuring the event will not excede any job
 // thresholds set.
 func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
@@ -451,31 +452,33 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) error {
 				if group.Scaling.ScaleDirection == "Out" && *taskGroup.Count >= group.Scaling.Max ||
 					group.Scaling.ScaleDirection == "In" && *taskGroup.Count <= group.Scaling.Min {
 
-					return fmt.Errorf("scale %v operation not permitted due to min/max constraints", group.Scaling.ScaleDirection)
+					return fmt.Errorf("scale %v operation not permitted due to min/max constraints",
+						group.Scaling.ScaleDirection)
 				}
 
-				if *taskGroup.Name == group.GroupName {
+				// Depending on the scaling direction decrement/incrament the count;
+				// currently replicator only supports addition/subtraction of 1.
+				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "Out" {
+					*jobResp.TaskGroups[0].Count++
+				}
 
-					// Depending on the scaling direction decrement/incrament the count; currently
-					// replicator only supports addition/subtraction of 1.
-					if group.Scaling.ScaleDirection == "Out" {
-						*jobResp.TaskGroups[0].Count++
-					}
-
-					if group.Scaling.ScaleDirection == "In" {
-						*jobResp.TaskGroups[0].Count--
-					}
+				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "In" {
+					*jobResp.TaskGroups[0].Count--
 				}
 			}
 		}
 	}
 
-	// TODO: Jrasell - use the Nomad 0.5.5 validation function to validate the job
-	// before sending it to Nomad.
+	// Nomad 0.5.5 introduced a Jobs.Validate endpoint within the API package
+	// which validates the job syntax before submition.
+	_, _, err = c.nomad.Jobs().Validate(jobResp, &nomad.WriteOptions{})
+	if err != nil {
+		return err
+	}
+
 	// Submit the job to the Register API endpoint with the altered count number
 	// and check that no error is returned.
 	_, _, err = c.nomad.Jobs().Register(jobResp, &nomad.WriteOptions{})
-
 	if err != nil {
 		return err
 	}
