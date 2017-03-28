@@ -71,9 +71,10 @@ func (r *Runner) Start() {
 
 			for _, sp := range scalingPolicies {
 				for _, gsp := range sp.GroupScalingPolicies {
-					logging.Info("Group Name: %v, Scaling Metric: %v\n", gsp.GroupName, gsp.ScalingMetric)
-					logging.Info("Group Name: %v, CPU: %v, Memory: %v\n", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
+					logging.Info("Group Name: %v, Scaling Metric: %v", gsp.GroupName, gsp.ScalingMetric)
+					logging.Info("Group Name: %v, CPU: %v, Memory: %v", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
 						gsp.Tasks.Resources.MemoryPercent)
+					logging.Info("Group Name: %v, Scaling Direction: %v", gsp.GroupName, gsp.Scaling.ScaleDirection)
 				}
 			}
 
