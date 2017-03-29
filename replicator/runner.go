@@ -1,11 +1,12 @@
 package replicator
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/elsevier-core-engineering/consulate/logging"
 	"github.com/elsevier-core-engineering/replicator/api"
 	config "github.com/elsevier-core-engineering/replicator/config/structs"
-	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
 // Runner is the main runner struct.
@@ -30,24 +31,17 @@ func NewRunner(config *config.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(1))
+	ticker := time.NewTicker(time.Second * time.Duration(5))
 
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			client, _ := api.NewNomadClient(r.config.Nomad)
-			//consulClient, _ := api.NewConsulClient(r.config.Consul)
 
-			clusterCapacity := &api.ClusterAllocation{}
-			client.EvaluateClusterCapacity(clusterCapacity, r.config)
+			r.clusterScaling()
 
-			logging.Info("Cluster Capacity: CPU - %v, MEM - %v", clusterCapacity.TotalCapacity.CPUMHz,
-				clusterCapacity.TotalCapacity.MemoryMB)
-			logging.Info("Cluster Usage: CPU - %v, MEM - %v", clusterCapacity.UsedCapacity.CPUPercent,
-				clusterCapacity.UsedCapacity.MemoryPercent)
-			logging.Info("Scaling Metric: %v", clusterCapacity.ScalingMetric)
+			r.jobScaling()
 
 			// TODO: Consolidate cluster scaling into single entry-point method that can
 			// be called concurrently. This includes the following:
@@ -56,7 +50,7 @@ func (r *Runner) Start() {
 			// - TaskAllocationTotals
 			// - api.PercentageCapacityRequired
 			// - MostUtilizedResource
-			// - CheckClusterScalingTimeThreshold
+			// - CheckClusterScalingTimeThreshold (only required for scaling operations)
 			// - LeastAllocatedNode (Only required for scale-in operations)
 			// - DrainNode (Only required for scale-in operations)
 			// - ScaleOutCluster, ScaleInCluster
@@ -88,27 +82,11 @@ func (r *Runner) Start() {
 			// 	logging.Info("We have cluster leadership.")
 			// }
 			//
-			// // TODO: Consolidate job scaling into single entry point; this includes:
-			// // - consulClient.ListConsulKV (returns only running jobs and those enabled for scaling)
-			// // - EvaluateJobScaling
-			// // - JobScale
-			//
-			// scalingPolicies, _ := consulClient.ListConsulKV("", "replicator/config/jobs", r.config)
-			// logging.Info("%v", scalingPolicies)
-			// client.EvaluateJobScaling(scalingPolicies)
-			//
-			// for _, sp := range scalingPolicies {
-			// 	for _, gsp := range sp.GroupScalingPolicies {
-			// 		logging.Info("Group Name: %v, Scaling Metric: %v", gsp.GroupName, gsp.ScalingMetric)
-			// 		logging.Info("Group Name: %v, CPU: %v, Memory: %v", gsp.GroupName, gsp.Tasks.Resources.CPUPercent,
-			// 			gsp.Tasks.Resources.MemoryPercent)
-			// 		logging.Info("Group Name: %v, Scaling Direction: %v", gsp.GroupName, gsp.Scaling.ScaleDirection)
-			// 	}
-			// }
 			//
 			// target := client.LeastAllocatedNode(allocs)
 			// logging.Info("Least Allocated Node: %v", target)
 			// // client.DrainNode(target)
+			logging.Info("%v", RuntimeStats())
 		case <-r.doneChan:
 			return
 		}
@@ -118,4 +96,79 @@ func (r *Runner) Start() {
 // Stop halts the execution of this runner.
 func (r *Runner) Stop() {
 	close(r.doneChan)
+}
+
+// clusterScaling is the main entry point into the cluster scaling functionality
+// and ties numerous functions together to create an asynchronus function which
+// can be called from the runner.
+func (r *Runner) clusterScaling() {
+
+	client, err := api.NewNomadClient(r.config.Nomad)
+	if err != nil {
+		fmt.Printf("%v", err)
+	}
+
+	clusterCapacity := &api.ClusterAllocation{}
+
+	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
+		fmt.Printf("%v", err)
+	}
+
+	logging.Info("Cluster Capacity: CPU - %v, MEM - %v", clusterCapacity.TotalCapacity.CPUMHz,
+		clusterCapacity.TotalCapacity.MemoryMB)
+	logging.Info("Cluster Usage: CPU - %v, MEM - %v", clusterCapacity.UsedCapacity.CPUPercent,
+		clusterCapacity.UsedCapacity.MemoryPercent)
+	logging.Info("Scaling Metric: %v", clusterCapacity.ScalingMetric)
+}
+
+// jobScaling is the main entry point for the Nomad job scaling functionality
+// and ties together a number of functions to be called from the runner.
+func (r *Runner) jobScaling() {
+
+	// Scaling a Cluster Jobs requires access to both Consul and Nomad therefore
+	// we setup the clients here.
+	consulClient, err := api.NewConsulClient(r.config.Consul)
+	if err != nil {
+		logging.Error("%v", err)
+		return
+	}
+
+	nomadClient, err := api.NewNomadClient(r.config.Nomad)
+	if err != nil {
+		logging.Error("%v", err)
+		return
+	}
+
+	// Pull the list of all currently running jobs which have an enabled scaling
+	// document.
+	resp, err := consulClient.ListConsulKV(r.config, nomadClient)
+	if err != nil {
+		logging.Error("%v", err)
+	}
+
+	// EvaluateJobScaling identifies whether each of the Job.Groups requires a
+	// scaling event to be triggered. This is then iterated so the individual
+	// groups can be assesed.
+	nomadClient.EvaluateJobScaling(resp)
+	for _, job := range resp {
+
+		// Due to the nested nature of the job and group Nomad definitions a dumb
+		// metric is used to determine whether the job has 1 or more groups which
+		// require scaling.
+		i := 0
+
+		for _, group := range job.GroupScalingPolicies {
+			if group.Scaling.ScaleDirection == "Out" || group.Scaling.ScaleDirection == "In" {
+				logging.Info("scale %v to be requested on job \"%v\" and group \"%v\"", group.Scaling.ScaleDirection, job.JobName, group.GroupName)
+				i++
+			}
+		}
+
+		// If 1 or more groups need to be scaled we submit the whole job for scaling
+		// as to scale you must submit the whole job file currently. The JobScale
+		// function takes care of scaling groups independently.
+		if i > 0 {
+			nomadClient.JobScale(job)
+		}
+	}
 }

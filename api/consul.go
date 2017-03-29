@@ -80,7 +80,7 @@ type scalein struct {
 // The Client interface is used to provide common method signatures for
 // interacting with the Consul API.
 type Client interface {
-	ListConsulKV(string, string, *config.Config) ([]*JobScalingPolicy, error)
+	ListConsulKV(*config.Config, NomadClient) ([]*JobScalingPolicy, error)
 }
 
 // The client object is a wrapper to the Consul client provided by the Consul
@@ -109,23 +109,18 @@ func NewConsulClient(addr string) (Client, error) {
 // ListConsulKV provides a recursed list of Consul KeyValues at the defined
 // location and can accept an ACL Token if this is enabled on the Consul cluster
 // being used.
-func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Config) ([]*JobScalingPolicy, error) {
+func (c *client) ListConsulKV(config *config.Config, nomadClient NomadClient) ([]*JobScalingPolicy, error) {
 	var entries []*JobScalingPolicy
 
 	// Setup the QueryOptions to include the aclToken if this has been set, if not
 	// procede with empty QueryOptions struct.
 	qop := &consul.QueryOptions{}
-	if aclToken != "" {
-		qop.Token = aclToken
+	if config.JobScaling.ConsulToken != "" {
+		qop.Token = config.JobScaling.ConsulToken
 	}
 
 	// Collect the recursed results from Consul.
-	resp, _, err := c.consul.KV().List(keyLocation, qop)
-	if err != nil {
-		return entries, err
-	}
-
-	nomadC, err := NewNomadClient(config.Nomad)
+	resp, _, err := c.consul.KV().List(config.JobScaling.ConsulKeyLocation, qop)
 	if err != nil {
 		return entries, err
 	}
@@ -141,11 +136,11 @@ func (c *client) ListConsulKV(aclToken, keyLocation string, config *config.Confi
 		json.Unmarshal(uDec, s)
 
 		// Trim the Key and its trailing slash to find the job name.
-		s.JobName = strings.TrimPrefix(job.Key, keyLocation+"/")
+		s.JobName = strings.TrimPrefix(job.Key, config.JobScaling.ConsulKeyLocation+"/")
 
 		// Check to see whether the scaling document is enabled and the job has
 		// running task groups before appending to the return.
-		if s.Enabled && nomadC.IsJobRunning(s.JobName) {
+		if s.Enabled && nomadClient.IsJobRunning(s.JobName) {
 
 			// Each scaling policy document is then appended to a list to form a full
 			// view of all scaling documents available to the cluster.
