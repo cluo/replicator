@@ -11,9 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-// describeAWSRegion uses the EC2 InstanceMetaData endpoint to discover the AWS
+// DescribeAWSRegion uses the EC2 InstanceMetaData endpoint to discover the AWS
 // region in which the instance is running.
-func describeAWSRegion() (region string, err error) {
+func DescribeAWSRegion() (region string, err error) {
+
 	ec2meta := ec2metadata.New(session.New())
 	identity, err := ec2meta.GetInstanceIdentityDocument()
 	if err != nil {

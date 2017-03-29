@@ -108,6 +108,12 @@ func (r *Runner) clusterScaling() {
 		fmt.Printf("%v", err)
 	}
 
+	if r.config.Region == "" {
+		if region, err := api.DescribeAWSRegion(); err == nil {
+			r.config.Region = region
+		}
+	}
+
 	clusterCapacity := &api.ClusterAllocation{}
 
 	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
