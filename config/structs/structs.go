@@ -18,6 +18,9 @@ type Config struct {
 	// actioned, or whether the application runs in report only mode.
 	Enforce bool `mapstructure:"enforce"`
 
+	// Region represents the AWS region the cluster resides in.
+	Region string `mapstructure:"aws_region"`
+
 	// ClusterScaling is the configuration struct that controls the basic Nomad
 	// worker node scaling.
 	ClusterScaling *ClusterScaling `mapstructure:"cluster_scaling"`
@@ -47,11 +50,14 @@ type ClusterScaling struct {
 
 	// CoolDown is the number of seconds after a scaling activity completes before
 	// another can begin.
-	CoolDown float64 `mapstructure:"cool_down"`
+	CoolDown int `mapstructure:"cool_down"`
 
 	// NodeFaultTolerance is the number of Nomad worker nodes the cluster can
 	// support losing, whilst still maintaining all existing workload.
 	NodeFaultTolerance int `mapstructure:"node_fault_tolerance"`
+
+	// AutoscalingGroup is the name of the ASG assigned to the Nomad worker nodes.
+	AutoscalingGroup string `mapstructure:"autoscaling_group"`
 }
 
 // JobScaling is the configuration struct for the Nomad job scaling activities.
@@ -95,10 +101,16 @@ func (c *Config) Merge(o *Config) {
 	if o.WasSet("log_level") {
 		c.LogLevel = o.LogLevel
 	}
+	if o.WasSet("aws_region") {
+		c.Region = o.Region
+	}
 	if o.WasSet("enforce") {
 		c.Enforce = o.Enforce
 	}
 	if o.WasSet("cluster_scaling") {
+		if o.WasSet("cluster_scaling.autoscaling_group") {
+			c.ClusterScaling.AutoscalingGroup = o.ClusterScaling.AutoscalingGroup
+		}
 		if o.WasSet("cluster_scaling.max_size") {
 			c.ClusterScaling.MaxSize = o.ClusterScaling.MaxSize
 		}
