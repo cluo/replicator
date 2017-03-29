@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/elsevier-core-engineering/consulate/logging"
 	"github.com/elsevier-core-engineering/replicator/api"
 	config "github.com/elsevier-core-engineering/replicator/config/structs"
+	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
 // Runner is the main runner struct.
