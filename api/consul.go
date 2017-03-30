@@ -77,22 +77,25 @@ type scalein struct {
 	MEM float64 `json:"mem"`
 }
 
-// The Client interface is used to provide common method signatures for
+// The ConsulClient interface is used to provide common method signatures for
 // interacting with the Consul API.
-type Client interface {
+type ConsulClient interface {
+	// ListConsulKV provides a recursed list of Consul KeyValues at the defined
+	// location and can accept an ACL Token if this is enabled on the Consul cluster
+	// being used.
 	ListConsulKV(*config.Config, NomadClient) ([]*JobScalingPolicy, error)
 }
 
 // The client object is a wrapper to the Consul client provided by the Consul
 // API library.
-type client struct {
+type consulClient struct {
 	consul *consul.Client
 }
 
 // NewConsulClient is used to construct a new Consul client using the default
 // configuration and supporting the ability to specify a Consul API address
 // endpoint in the form of address:port.
-func NewConsulClient(addr string) (Client, error) {
+func NewConsulClient(addr string) (ConsulClient, error) {
 	// TODO (e.westfall): Add a quick health check call to an API endpoint to
 	// validate connectivity or return an error back to the caller.
 	config := consul.DefaultConfig()
@@ -103,13 +106,13 @@ func NewConsulClient(addr string) (Client, error) {
 		return nil, err
 	}
 
-	return &client{consul: c}, nil
+	return &consulClient{consul: c}, nil
 }
 
 // ListConsulKV provides a recursed list of Consul KeyValues at the defined
 // location and can accept an ACL Token if this is enabled on the Consul cluster
 // being used.
-func (c *client) ListConsulKV(config *config.Config, nomadClient NomadClient) ([]*JobScalingPolicy, error) {
+func (c *consulClient) ListConsulKV(config *config.Config, nomadClient NomadClient) ([]*JobScalingPolicy, error) {
 	var entries []*JobScalingPolicy
 
 	// Setup the QueryOptions to include the aclToken if this has been set, if not
@@ -120,7 +123,13 @@ func (c *client) ListConsulKV(config *config.Config, nomadClient NomadClient) ([
 	}
 
 	// Collect the recursed results from Consul.
-	resp, _, err := c.consul.KV().List(config.JobScaling.ConsulKeyLocation, qop)
+	// resp, _, err := c.consul.KV().List(config.JobScaling.ConsulKeyLocation, qop)
+	// if err != nil {
+	// 	return entries, err
+	// }
+
+	kvClient := c.consul.KV()
+	resp, _, err := kvClient.List(config.JobScaling.ConsulKeyLocation, qop)
 	if err != nil {
 		return entries, err
 	}
