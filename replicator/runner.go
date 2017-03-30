@@ -7,6 +7,7 @@ import (
 	"github.com/elsevier-core-engineering/replicator/api"
 	config "github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/logging"
+	consul "github.com/hashicorp/consul/api"
 )
 
 // Runner is the main runner struct.
@@ -31,7 +32,7 @@ func NewRunner(config *config.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(5))
+	ticker := time.NewTicker(time.Second * time.Duration(1))
 
 	defer ticker.Stop()
 
@@ -39,9 +40,10 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 
-			r.clusterScaling()
+			// r.clusterScaling()
 
-			r.jobScaling()
+			// r.jobScaling()
+			r.test()
 
 			// TODO: Consolidate cluster scaling into single entry-point method that can
 			// be called concurrently. This includes the following:
@@ -177,4 +179,13 @@ func (r *Runner) jobScaling() {
 			nomadClient.JobScale(job)
 		}
 	}
+}
+
+func (r *Runner) test() {
+	config := consul.DefaultConfig()
+	config.Address = "localhost:8500"
+	c, _ := consul.NewClient(config)
+
+	resp, _ := c.Status().Leader()
+	logging.Info(resp)
 }
