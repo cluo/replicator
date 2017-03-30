@@ -5,66 +5,66 @@ import (
 	"time"
 
 	"github.com/dariubs/percent"
-	config "github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/helper"
 	"github.com/elsevier-core-engineering/replicator/logging"
+	"github.com/elsevier-core-engineering/replicator/replicator/structs"
 	nomad "github.com/hashicorp/nomad/api"
 )
 
-// NomadClient exposes all API methods needed to interact with the Nomad API,
-// evaluate cluster capacity and allocations and make scaling decisions.
-type NomadClient interface {
-	// ClusterAllocationCapacity determines the total cluster capacity and current
-	// number of worker nodes.
-	ClusterAllocationCapacity(*ClusterAllocation) error
-
-	// ClusterAssignedAllocation determines the consumed capacity across the
-	// cluster and tracks the resource consumption of each worker node.
-	ClusterAssignedAllocation(*ClusterAllocation) error
-
-	// DrainNode places a worker node in drain mode to stop future allocations and
-	// migrate existing allocations to other worker nodes.
-	DrainNode(string) error
-
-	// EvaluateClusterCapacity determines if a cluster scaling action is required.
-	EvaluateClusterCapacity(*ClusterAllocation, *config.Config) (bool, error)
-
-	// EvaluateJobScaling compares the consumed resource percentages of a Job group
-	// against its scaling policy to determine whether a scaling event is required.
-	EvaluateJobScaling([]*JobScalingPolicy)
-
-	// GetAllocationStats discovers the resources consumed by a particular Nomad
-	// allocation.
-	GetAllocationStats(*nomad.Allocation, *GroupScalingPolicy)
-
-	// GetJobAllocations identifies all allocations for an active job.
-	GetJobAllocations([]*nomad.AllocationListStub, *GroupScalingPolicy)
-
-	// LeaderCheck determines if the node running replicator is the gossip pool
-	// leader.
-	LeaderCheck() bool
-
-	// LeaseAllocatedNode determines the worker node consuming the least amount of
-	// the cluster's mosted-utilized resource.
-	LeastAllocatedNode(*ClusterAllocation) string
-
-	// MostUtilizedResource calculates which resource is most-utilized across the
-	// cluster. The worst-case allocation resource is prioritized when making
-	// scaling decisions.
-	MostUtilizedResource(*ClusterAllocation)
-
-	// IsJobRunning checks to see whether the specified jobID has any currently
-	// task groups on the cluster.
-	IsJobRunning(string) bool
-
-	JobScale(*JobScalingPolicy)
-
-	// TaskAllocationTotals calculates the allocations required by each running
-	// job and what amount of resources required if we increased the count of
-	// each job by one. This allows the cluster to proactively ensure it has
-	// sufficient capacity for scaling events and deal with potential node failures.
-	TaskAllocationTotals(*ClusterAllocation) error
-}
+// // NomadClient exposes all API methods needed to interact with the Nomad API,
+// // evaluate cluster capacity and allocations and make scaling decisions.
+// type NomadClient interface {
+// 	// ClusterAllocationCapacity determines the total cluster capacity and current
+// 	// number of worker nodes.
+// 	ClusterAllocationCapacity(*ClusterAllocation) error
+//
+// 	// ClusterAssignedAllocation determines the consumed capacity across the
+// 	// cluster and tracks the resource consumption of each worker node.
+// 	ClusterAssignedAllocation(*ClusterAllocation) error
+//
+// 	// DrainNode places a worker node in drain mode to stop future allocations and
+// 	// migrate existing allocations to other worker nodes.
+// 	DrainNode(string) error
+//
+// 	// EvaluateClusterCapacity determines if a cluster scaling action is required.
+// 	EvaluateClusterCapacity(*ClusterAllocation, *structs.Config) (bool, error)
+//
+// 	// EvaluateJobScaling compares the consumed resource percentages of a Job group
+// 	// against its scaling policy to determine whether a scaling event is required.
+// 	EvaluateJobScaling([]*JobScalingPolicy)
+//
+// 	// GetAllocationStats discovers the resources consumed by a particular Nomad
+// 	// allocation.
+// 	GetAllocationStats(*nomad.Allocation, *GroupScalingPolicy)
+//
+// 	// GetJobAllocations identifies all allocations for an active job.
+// 	GetJobAllocations([]*nomad.AllocationListStub, *GroupScalingPolicy)
+//
+// 	// LeaderCheck determines if the node running replicator is the gossip pool
+// 	// leader.
+// 	LeaderCheck() bool
+//
+// 	// LeaseAllocatedNode determines the worker node consuming the least amount of
+// 	// the cluster's mosted-utilized resource.
+// 	LeastAllocatedNode(*ClusterAllocation) string
+//
+// 	// MostUtilizedResource calculates which resource is most-utilized across the
+// 	// cluster. The worst-case allocation resource is prioritized when making
+// 	// scaling decisions.
+// 	MostUtilizedResource(*ClusterAllocation)
+//
+// 	// IsJobRunning checks to see whether the specified jobID has any currently
+// 	// task groups on the cluster.
+// 	IsJobRunning(string) bool
+//
+// 	JobScale(*JobScalingPolicy)
+//
+// 	// TaskAllocationTotals calculates the allocations required by each running
+// 	// job and what amount of resources required if we increased the count of
+// 	// each job by one. This allows the cluster to proactively ensure it has
+// 	// sufficient capacity for scaling events and deal with potential node failures.
+// 	TaskAllocationTotals(*ClusterAllocation) error
+// }
 
 // Scaling metric types indicate the most-utilized resource across the cluster. When evaluating
 // scaling decisions, the most-utilized resource will be prioritized.
@@ -84,70 +84,70 @@ const (
 
 const bytesPerMegabyte = 1024000
 
-// ClusterAllocation is the central object used to track cluster status and the data
-// required to make scaling decisions.
-type ClusterAllocation struct {
-	// NodeCount is the number of worker nodes in a ready and non-draining state across
-	// the cluster.
-	NodeCount int
-
-	// ScalingMetric indicates the most-utilized allocation resource across the cluster.
-	// The most-utilized resource is prioritized when making scaling decisions like
-	// identifying the least-allocated worker node.
-	ScalingMetric string
-
-	// MaxAllowedUtilization represents the max allowed cluster utilization after
-	// considering node fault-tolerance and task group scaling overhead.
-	MaxAllowedUtilization float64
-
-	// ClusterTotalAllocationCapacity is the total allocation capacity across the cluster.
-	TotalCapacity AllocationResources
-
-	// ClusterUsedAllocationCapacity is the consumed allocation capacity across the cluster.
-	UsedCapacity AllocationResources
-
-	// TaskAllocation represents the total allocation requirements of a single instance
-	// (count 1) of all running jobs across the cluster. This is used to practively
-	// ensure the cluster has sufficient available capacity to scale each task by +1
-	// if an increase in capacity is required.
-	TaskAllocation AllocationResources
-
-	// NodeList is a list of all worker nodes in a known good state.
-	NodeList []string
-
-	// NodeAllocations is a slice of node allocations.
-	NodeAllocations []*NodeAllocation
-}
-
-// NodeAllocation describes the resource consumption of a specific worker node.
-type NodeAllocation struct {
-	// NodeID is the unique ID of the worker node.
-	NodeID string
-
-	// UsedCapacity represents the percentage of total cluster resources consumed by
-	// the worker node.
-	UsedCapacity AllocationResources
-}
-
-// TaskAllocation describes the resource requirements defined in the job specification.
-type TaskAllocation struct {
-	// TaskName is the name given to the task within the job specficiation.
-	TaskName string
-
-	// Resources tracks the resource requirements defined in the job spec and the
-	// real-time utilization of those resources.
-	Resources AllocationResources
-}
-
-// AllocationResources represents the allocation resource utilization.
-type AllocationResources struct {
-	MemoryMB      int
-	CPUMHz        int
-	DiskMB        int
-	MemoryPercent float64
-	CPUPercent    float64
-	DiskPercent   float64
-}
+// // ClusterAllocation is the central object used to track cluster status and the data
+// // required to make scaling decisions.
+// type ClusterAllocation struct {
+// 	// NodeCount is the number of worker nodes in a ready and non-draining state across
+// 	// the cluster.
+// 	NodeCount int
+//
+// 	// ScalingMetric indicates the most-utilized allocation resource across the cluster.
+// 	// The most-utilized resource is prioritized when making scaling decisions like
+// 	// identifying the least-allocated worker node.
+// 	ScalingMetric string
+//
+// 	// MaxAllowedUtilization represents the max allowed cluster utilization after
+// 	// considering node fault-tolerance and task group scaling overhead.
+// 	MaxAllowedUtilization float64
+//
+// 	// ClusterTotalAllocationCapacity is the total allocation capacity across the cluster.
+// 	TotalCapacity AllocationResources
+//
+// 	// ClusterUsedAllocationCapacity is the consumed allocation capacity across the cluster.
+// 	UsedCapacity AllocationResources
+//
+// 	// TaskAllocation represents the total allocation requirements of a single instance
+// 	// (count 1) of all running jobs across the cluster. This is used to practively
+// 	// ensure the cluster has sufficient available capacity to scale each task by +1
+// 	// if an increase in capacity is required.
+// 	TaskAllocation AllocationResources
+//
+// 	// NodeList is a list of all worker nodes in a known good state.
+// 	NodeList []string
+//
+// 	// NodeAllocations is a slice of node allocations.
+// 	NodeAllocations []*NodeAllocation
+// }
+//
+// // NodeAllocation describes the resource consumption of a specific worker node.
+// type NodeAllocation struct {
+// 	// NodeID is the unique ID of the worker node.
+// 	NodeID string
+//
+// 	// UsedCapacity represents the percentage of total cluster resources consumed by
+// 	// the worker node.
+// 	UsedCapacity AllocationResources
+// }
+//
+// // TaskAllocation describes the resource requirements defined in the job specification.
+// type TaskAllocation struct {
+// 	// TaskName is the name given to the task within the job specficiation.
+// 	TaskName string
+//
+// 	// Resources tracks the resource requirements defined in the job spec and the
+// 	// real-time utilization of those resources.
+// 	Resources AllocationResources
+// }
+//
+// // AllocationResources represents the allocation resource utilization.
+// type AllocationResources struct {
+// 	MemoryMB      int
+// 	CPUMHz        int
+// 	DiskMB        int
+// 	MemoryPercent float64
+// 	CPUPercent    float64
+// 	DiskPercent   float64
+// }
 
 // Provides a wrapper to the Nomad API package.
 type nomadClient struct {
@@ -156,7 +156,7 @@ type nomadClient struct {
 
 // NewNomadClient is used to create a new client to interact with Nomad. The
 // client implements the NomadClient interface.
-func NewNomadClient(addr string) (NomadClient, error) {
+func NewNomadClient(addr string) (structs.NomadClient, error) {
 	config := nomad.DefaultConfig()
 	config.Address = addr
 	c, err := nomad.NewClient(config)
@@ -168,7 +168,7 @@ func NewNomadClient(addr string) (NomadClient, error) {
 }
 
 // EvaluateClusterCapacity determines if a cluster scaling operation is required.
-func (c *nomadClient) EvaluateClusterCapacity(capacity *ClusterAllocation, config *config.Config) (scalingRequired bool, err error) {
+func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocation, config *structs.Config) (scalingRequired bool, err error) {
 	// Determine total cluster capacity.
 	if err = c.ClusterAllocationCapacity(capacity); err != nil {
 		return
@@ -206,7 +206,7 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *ClusterAllocation, confi
 
 // ClusterAllocationCapacity calculates the total cluster capacity and determines the
 // number of available worker nodes.
-func (c *nomadClient) ClusterAllocationCapacity(capacity *ClusterAllocation) (err error) {
+func (c *nomadClient) ClusterAllocationCapacity(capacity *structs.ClusterAllocation) (err error) {
 	// Retrieve a list of all worker nodes within the cluster.
 	nodes, _, err := c.nomad.Nodes().List(&nomad.QueryOptions{})
 	if err != nil {
@@ -236,7 +236,7 @@ func (c *nomadClient) ClusterAllocationCapacity(capacity *ClusterAllocation) (er
 
 // ClusterAssignedAllocation calculates the total consumed resources across the cluster
 // and the amount of resources consumed by each worker node.
-func (c *nomadClient) ClusterAssignedAllocation(clusterInfo *ClusterAllocation) (err error) {
+func (c *nomadClient) ClusterAssignedAllocation(clusterInfo *structs.ClusterAllocation) (err error) {
 	for _, node := range clusterInfo.NodeList {
 		allocations, _, err := c.nomad.Nodes().Allocations(node, &nomad.QueryOptions{})
 		if err != nil {
@@ -244,9 +244,9 @@ func (c *nomadClient) ClusterAssignedAllocation(clusterInfo *ClusterAllocation) 
 		}
 
 		// Instantiate a new object to track the resource consumption of the worker node.
-		nodeInfo := &NodeAllocation{
+		nodeInfo := &structs.NodeAllocation{
 			NodeID:       node,
-			UsedCapacity: AllocationResources{},
+			UsedCapacity: structs.AllocationResources{},
 		}
 
 		for _, nodeAlloc := range allocations {
@@ -276,7 +276,7 @@ func (c *nomadClient) ClusterAssignedAllocation(clusterInfo *ClusterAllocation) 
 
 // CalculateUsage determines the percentage of overall cluster resources consumed and
 // calculates the amount of those resources consumed by each worker node.
-func CalculateUsage(clusterInfo *ClusterAllocation) {
+func CalculateUsage(clusterInfo *structs.ClusterAllocation) {
 	// For each allocation resource, calculate the percentage of overall cluster capacity
 	// consumed.
 	clusterInfo.UsedCapacity.CPUPercent = percent.PercentOf(
@@ -329,7 +329,7 @@ func (c *nomadClient) LeaderCheck() bool {
 // of all running jobs across the cluster. This is used to practively ensure the cluster
 // has sufficient available capacity to scale each task by +1 if an increase in capacity
 // is required.
-func (c *nomadClient) TaskAllocationTotals(capacityUsed *ClusterAllocation) error {
+func (c *nomadClient) TaskAllocationTotals(capacityUsed *structs.ClusterAllocation) error {
 	// TODO: Allow behavior to be configured; restrict this check to only jobs with a
 	// scaling policy present.
 
@@ -366,7 +366,7 @@ func (c *nomadClient) TaskAllocationTotals(capacityUsed *ClusterAllocation) erro
 //
 // If all resources are completely unutilized, the scaling metric will be set to `None`
 // and the daemon will take no actions.
-func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
+func (c *nomadClient) MostUtilizedResource(alloc *structs.ClusterAllocation) {
 	// Determine the resource that is consuming the greatest percentage of its overall cluster
 	// capacity.
 	max := (helper.Max(alloc.UsedCapacity.CPUPercent, alloc.UsedCapacity.MemoryPercent,
@@ -387,7 +387,7 @@ func (c *nomadClient) MostUtilizedResource(alloc *ClusterAllocation) {
 
 // MostUtilizedGroupResource determines whether CPU or Mem are the most utilized
 // resource of a Group.
-func (c *nomadClient) MostUtilizedGroupResource(gsp *GroupScalingPolicy) {
+func (c *nomadClient) MostUtilizedGroupResource(gsp *structs.GroupScalingPolicy) {
 	max := (helper.Max(gsp.Tasks.Resources.CPUPercent,
 		gsp.Tasks.Resources.MemoryPercent))
 
@@ -403,7 +403,7 @@ func (c *nomadClient) MostUtilizedGroupResource(gsp *GroupScalingPolicy) {
 // resource identified as the most-utilized resource across the cluster. Since Nomad follows
 // a bin-packing approach, when we need to remove a worker node in response to a scale-in
 // activity, we want to identify the least-allocated node and target it for removal.
-func (c *nomadClient) LeastAllocatedNode(clusterInfo *ClusterAllocation) (node string) {
+func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation) (node string) {
 	var lowestAllocation float64
 
 	for _, nodeAlloc := range clusterInfo.NodeAllocations {
@@ -487,7 +487,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 // JobScale takes a Scaling Policy and then attempts to scale the desired job
 // to the appropriate level whilst ensuring the event will not excede any job
 // thresholds set.
-func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) {
+func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 
 	// In order to scale the job, we need information on the current status of the
 	// running job from Nomad.
@@ -547,7 +547,7 @@ func (c *nomadClient) JobScale(scalingDoc *JobScalingPolicy) {
 
 // GetTaskGroupResources finds the defined resource requirements for a
 // given Job.
-func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupScalingPolicy) {
+func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *structs.GroupScalingPolicy) {
 	jobs, _, err := c.nomad.Jobs().Info(jobName, &nomad.QueryOptions{})
 	if err != nil {
 		logging.Error("failed to retrieve job details for job %v: %v\n", jobName, err)
@@ -564,7 +564,7 @@ func (c *nomadClient) GetTaskGroupResources(jobName string, groupPolicy *GroupSc
 // EvaluateJobScaling identifies Nomad allocations representative of a Job group
 // and compares the consumed resource percentages against the scaling policy to
 // determine whether a scaling event is required.
-func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
+func (c *nomadClient) EvaluateJobScaling(jobs []*structs.JobScalingPolicy) {
 	for _, policy := range jobs {
 		for _, gsp := range policy.GroupScalingPolicies {
 			c.GetTaskGroupResources(policy.JobName, gsp)
@@ -597,7 +597,7 @@ func (c *nomadClient) EvaluateJobScaling(jobs []*JobScalingPolicy) {
 }
 
 // GetJobAllocations identifies all allocations for an active job.
-func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp *GroupScalingPolicy) {
+func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp *structs.GroupScalingPolicy) {
 	for _, allocationStub := range allocs {
 		if (allocationStub.ClientStatus == "running") && (allocationStub.DesiredStatus == "run") {
 			if alloc, _, err := c.nomad.Allocations().Info(allocationStub.ID, &nomad.QueryOptions{}); err == nil && alloc != nil {
@@ -609,7 +609,7 @@ func (c *nomadClient) GetJobAllocations(allocs []*nomad.AllocationListStub, gsp 
 
 // GetAllocationStats discovers the resources consumed by a particular Nomad
 // allocation.
-func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *GroupScalingPolicy) {
+func (c *nomadClient) GetAllocationStats(allocation *nomad.Allocation, scalingPolicy *structs.GroupScalingPolicy) {
 	stats, err := c.nomad.Allocations().Stats(allocation, &nomad.QueryOptions{})
 	if err != nil {
 		logging.Error("failed to retrieve allocation statistics from client %v: %v\n", allocation.NodeID, err)
@@ -647,7 +647,7 @@ func (c *nomadClient) IsJobRunning(jobID string) bool {
 // capacityTotal:     is the total cluster allocation capacity
 // capacityUsed:      is the total cluster allocation currently in use
 // nodeFailureCount:  is the number of acceptable node failures to tollerate
-func PercentageCapacityRequired(capacity *ClusterAllocation, nodeFailureCount int) (capacityRequired float64) {
+func PercentageCapacityRequired(capacity *structs.ClusterAllocation, nodeFailureCount int) (capacityRequired float64) {
 	var allocTotal, capacityTotal int
 
 	// Determine task allocation total based on cluster scaling metric.
@@ -675,7 +675,7 @@ func PercentageCapacityRequired(capacity *ClusterAllocation, nodeFailureCount in
 
 // MaxAllowedClusterUtilization calculates the maximum allowed cluster utilization after
 // taking into consideration node fault-tolerance and scaling overhead.
-func MaxAllowedClusterUtilization(capacity *ClusterAllocation, nodeFaultTolerance int) (maxAllowedUtilization float64) {
+func MaxAllowedClusterUtilization(capacity *structs.ClusterAllocation, nodeFaultTolerance int) (maxAllowedUtilization float64) {
 	var allocTotal, capacityTotal int
 
 	// Use the cluster scaling metric when determining total cluster capacity

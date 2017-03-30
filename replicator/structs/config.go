@@ -34,6 +34,12 @@ type Config struct {
 
 	// setKeys is the list of config keys that were overridden by the user.
 	SetKeys map[string]struct{}
+
+	// ConsulClient provides a client to interact with the Consul API.
+	ConsulClient ConsulClient
+
+	// NomadClient provides a client to interact with the Nomad API.
+	NomadClient NomadClient
 }
 
 // ClusterScaling is the configuration struct for the Nomad worker node scaling

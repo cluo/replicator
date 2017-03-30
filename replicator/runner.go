@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
-	config "github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/logging"
+	"github.com/elsevier-core-engineering/replicator/replicator/structs"
 	consul "github.com/hashicorp/consul/api"
 )
 
@@ -17,11 +17,11 @@ type Runner struct {
 
 	// config is the Config that created this Runner. It is used internally to
 	// construct other objects and pass data.
-	config *config.Config
+	config *structs.Config
 }
 
 // NewRunner sets up the Runner type.
-func NewRunner(config *config.Config) (*Runner, error) {
+func NewRunner(config *structs.Config) (*Runner, error) {
 	runner := &Runner{
 		doneChan: make(chan struct{}),
 		config:   config,
@@ -43,7 +43,7 @@ func (r *Runner) Start() {
 			// r.clusterScaling()
 
 			// r.jobScaling()
-			r.test()
+			//r.test()
 
 			// TODO: Consolidate cluster scaling into single entry-point method that can
 			// be called concurrently. This includes the following:
@@ -104,11 +104,7 @@ func (r *Runner) Stop() {
 // and ties numerous functions together to create an asynchronus function which
 // can be called from the runner.
 func (r *Runner) clusterScaling() {
-
-	client, err := api.NewNomadClient(r.config.Nomad)
-	if err != nil {
-		fmt.Printf("%v", err)
-	}
+	client := r.config.NomadClient
 
 	if r.config.Region == "" {
 		if region, err := api.DescribeAWSRegion(); err == nil {
@@ -116,7 +112,7 @@ func (r *Runner) clusterScaling() {
 		}
 	}
 
-	clusterCapacity := &api.ClusterAllocation{}
+	clusterCapacity := &structs.ClusterAllocation{}
 
 	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
 		fmt.Printf("%v", err)
@@ -135,17 +131,9 @@ func (r *Runner) jobScaling() {
 
 	// Scaling a Cluster Jobs requires access to both Consul and Nomad therefore
 	// we setup the clients here.
-	consulClient, err := api.NewConsulClient(r.config.Consul)
-	if err != nil {
-		logging.Error("%v", err)
-		return
-	}
+	consulClient := r.config.ConsulClient
 
-	nomadClient, err := api.NewNomadClient(r.config.Nomad)
-	if err != nil {
-		logging.Error("%v", err)
-		return
-	}
+	nomadClient := r.config.NomadClient
 
 	// Pull the list of all currently running jobs which have an enabled scaling
 	// document.

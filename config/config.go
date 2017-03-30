@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/elsevier-core-engineering/replicator/config/structs"
+	"github.com/elsevier-core-engineering/replicator/api"
+	"github.com/elsevier-core-engineering/replicator/logging"
+	"github.com/elsevier-core-engineering/replicator/replicator/structs"
+
 	conf "github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/hcl"
 	"github.com/mitchellh/mapstructure"
@@ -91,6 +94,20 @@ func ParseConfig(path string) (*structs.Config, error) {
 	d := DefaultConfig()
 	d.Merge(c)
 	c = d
+
+	// Instantiate a new Consul client.
+	if consulClient, err := api.NewConsulClient(c.Consul); err == nil {
+		c.ConsulClient = consulClient
+	} else {
+		logging.Error("failed to establish a new consul client: %v", err)
+	}
+
+	// Instantiate a new Nomad client.
+	if nomadClient, err := api.NewNomadClient(c.Nomad); err == nil {
+		c.NomadClient = nomadClient
+	} else {
+		logging.Error("failed to establish a new nomad client: %v", err)
+	}
 
 	return c, nil
 }

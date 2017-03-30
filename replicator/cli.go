@@ -9,8 +9,8 @@ import (
 
 	metrics "github.com/armon/go-metrics"
 	"github.com/elsevier-core-engineering/replicator/config"
-	"github.com/elsevier-core-engineering/replicator/config/structs"
 	"github.com/elsevier-core-engineering/replicator/logging"
+	"github.com/elsevier-core-engineering/replicator/replicator/structs"
 )
 
 // Setup our exit codes; errors start at 10 for easier debugging.
