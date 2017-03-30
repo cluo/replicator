@@ -96,9 +96,9 @@ type ClusterAllocation struct {
 	// identifying the least-allocated worker node.
 	ScalingMetric string
 
-	// RequiredCapacity represents the cluster resource consumption with reserved
-	// capacity accounted for.
-	RequiredCapacity float64
+	// MaxAllowedUtilization represents the max allowed cluster utilization after
+	// considering node fault-tolerance and task group scaling overhead.
+	MaxAllowedUtilization float64
 
 	// ClusterTotalAllocationCapacity is the total allocation capacity across the cluster.
 	TotalCapacity AllocationResources
@@ -187,14 +187,19 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *ClusterAllocation, confi
 	// Determine most-utilized resource across cluster to identify scaling metric.
 	c.MostUtilizedResource(capacity)
 
-	// Evaluate the current cluster capacity and the required reserved capacity,
-	// calculate the amount of required capacity consumed.
-	capacity.RequiredCapacity = PercentageCapacityRequired(capacity, config.ClusterScaling.NodeFaultTolerance)
+	capacity.MaxAllowedUtilization = MaxAllowedClusterUtilization(capacity, config.ClusterScaling.NodeFaultTolerance)
+	logging.Info("Max Allowed Utilization: %v", capacity.MaxAllowedUtilization)
 
-	if scale, err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
-		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil && !scale {
-		return false, nil
-	}
+	// if capacity.RequiredCapacity < float64(100) {
+	// 	logging.Info("scale in: %v", capacity.RequiredCapacity)
+	// } else if capacity.RequiredCapacity > float64(100) {
+	// 	logging.Info("scale out: %v", capacity.RequiredCapacity)
+	// }
+	//
+	// if scale, err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
+	// 	config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil && !scale {
+	// 	return false, nil
+	// }
 
 	return true, nil
 }
@@ -655,9 +660,38 @@ func PercentageCapacityRequired(capacity *ClusterAllocation, nodeFailureCount in
 		allocTotal = capacity.TaskAllocation.CPUMHz
 	}
 
-	nodeAvgAlloc := float64(capacity.NodeCount / capacityTotal)
+	logging.Info("Capacity Total: %v", capacityTotal)
+	logging.Info("Allocation Total: %v", allocTotal)
+	logging.Info("Node Count: %v", capacity.NodeCount)
+
+	nodeAvgAlloc := float64(capacityTotal / capacity.NodeCount)
+	logging.Info("Node Avg Alloc: %v", nodeAvgAlloc)
+	logging.Info("Node Failure Count: %v", nodeFailureCount)
 	top := float64((float64(allocTotal)) + (float64(capacityTotal) - (nodeAvgAlloc * float64(nodeFailureCount))))
 	capacityRequired = (top / float64(capacityTotal)) * 100
 
 	return capacityRequired
+}
+
+// MaxAllowedClusterUtilization calculates the maximum allowed cluster utilization after
+// taking into consideration node fault-tolerance and scaling overhead.
+func MaxAllowedClusterUtilization(capacity *ClusterAllocation, nodeFaultTolerance int) (maxAllowedUtilization float64) {
+	var allocTotal, capacityTotal int
+
+	// Use the cluster scaling metric when determining total cluster capacity
+	// and task group scaling overhead.
+	switch capacity.ScalingMetric {
+	case ScalingMetricMemory:
+		allocTotal = capacity.TaskAllocation.MemoryMB
+		capacityTotal = capacity.TotalCapacity.MemoryMB
+	default:
+		allocTotal = capacity.TaskAllocation.CPUMHz
+		capacityTotal = capacity.TotalCapacity.CPUMHz
+	}
+
+	nodeAvgAlloc := capacityTotal / capacity.NodeCount
+	maxResource := ((capacityTotal - allocTotal) - (nodeAvgAlloc * nodeFaultTolerance))
+	maxAllowedUtilization = float64(float64(maxResource)/float64(capacityTotal)) * 100
+
+	return
 }

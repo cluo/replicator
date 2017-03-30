@@ -39,6 +39,9 @@ type Config struct {
 // ClusterScaling is the configuration struct for the Nomad worker node scaling
 // activites.
 type ClusterScaling struct {
+	// Enabled indicates whether cluster scaling actions are permitted.
+	Enabled bool `mapstructure:"enabled"`
+
 	// MaxSize in the maximum number of instances the nomad node worker count is
 	// allowed to reach. This stops runaway increases in size due to misbehaviour
 	// but should be set high enough to accomodate usual workload peaks.
@@ -62,6 +65,9 @@ type ClusterScaling struct {
 
 // JobScaling is the configuration struct for the Nomad job scaling activities.
 type JobScaling struct {
+	// Enabled indicates whether job scaling actions are permitted.
+	Enabled bool `mapstructure:"enabled"`
+
 	// ConsulToken is the Consul ACL token used to access KeyValues from a
 	// secure Consul installation.
 	ConsulToken string `mapstructure:"consul_token"`
@@ -108,6 +114,9 @@ func (c *Config) Merge(o *Config) {
 		c.Enforce = o.Enforce
 	}
 	if o.WasSet("cluster_scaling") {
+		if o.WasSet("cluster_scaling.enabled") {
+			c.ClusterScaling.Enabled = o.ClusterScaling.Enabled
+		}
 		if o.WasSet("cluster_scaling.autoscaling_group") {
 			c.ClusterScaling.AutoscalingGroup = o.ClusterScaling.AutoscalingGroup
 		}
@@ -125,6 +134,9 @@ func (c *Config) Merge(o *Config) {
 		}
 	}
 	if o.WasSet("job_scaling") {
+		if o.WasSet("job_scaling.enabled") {
+			c.JobScaling.Enabled = o.JobScaling.Enabled
+		}
 		if o.WasSet("job_scaling.consul_token") {
 			c.JobScaling.ConsulToken = o.JobScaling.ConsulToken
 		}
