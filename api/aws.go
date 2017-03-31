@@ -255,5 +255,6 @@ func translateIptoID(ip, region string) (id string) {
 		return
 	}
 
+	logging.Info("Response: %v", resp)
 	return *resp.Reservations[0].Instances[0].InstanceId
 }

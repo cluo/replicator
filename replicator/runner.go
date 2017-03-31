@@ -125,12 +125,13 @@ func (r *Runner) clusterScaling(done chan bool) {
 				logging.Error("unable to successfully scale out cluster: %v", err)
 			}
 		}
+
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionIn {
 			nodeID, nodeIP := client.LeastAllocatedNode(clusterCapacity)
 			if nodeIP != "" && nodeID != "" {
 				logging.Info("NodeIP: %v, NodeID: %v", nodeIP, nodeID)
 				if err := client.DrainNode(nodeID); err == nil {
-					logging.Info("terminating AWS instance %v", nodeID)
+					logging.Info("terminating AWS instance %v", nodeIP)
 					err := api.ScaleInCluster(r.config.ClusterScaling.AutoscalingGroup, nodeIP, asgSess)
 					if err != nil {
 						logging.Error("unable to successfully terminate AWS instance %v: %v", nodeID, err)

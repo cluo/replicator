@@ -357,6 +357,7 @@ func (c *nomadClient) MostUtilizedGroupResource(gsp *structs.GroupScalingPolicy)
 func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation) (nodeID, nodeIP string) {
 	var lowestAllocation float64
 
+	logging.Info("Scaling Metric: %v", clusterInfo.ScalingMetric)
 	for _, nodeAlloc := range clusterInfo.NodeAllocations {
 		switch clusterInfo.ScalingMetric {
 		case ScalingMetricProcessor:
@@ -369,11 +370,8 @@ func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation)
 				nodeID = nodeAlloc.NodeID
 				lowestAllocation = nodeAlloc.UsedCapacity.MemoryPercent
 			}
-		case ScalingMetricDisk:
-			if (lowestAllocation == 0) || (nodeAlloc.UsedCapacity.DiskPercent < lowestAllocation) {
-				nodeID = nodeAlloc.NodeID
-				lowestAllocation = nodeAlloc.UsedCapacity.DiskPercent
-			}
+		case ScalingMetricNone:
+			nodeID = nodeAlloc.NodeID
 		}
 	}
 
