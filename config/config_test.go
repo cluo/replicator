@@ -1,47 +1,47 @@
 package config
 
-import (
-	"reflect"
-	"strings"
-	"testing"
+// import (
+// 	"reflect"
+// 	"strings"
+// 	"testing"
+//
+// 	"github.com/elsevier-core-engineering/replicator/api"
+// 	"github.com/elsevier-core-engineering/replicator/replicator/structs"
+// 	"github.com/hashicorp/consul-template/test"
+// )
 
-	"github.com/elsevier-core-engineering/replicator/api"
-	"github.com/elsevier-core-engineering/replicator/replicator/structs"
-	"github.com/hashicorp/consul-template/test"
-)
-
-func TestParseConfig_correctDefaulValues(t *testing.T) {
-	// TODO (e.westfall): Can we call ParseConfig in here to pickup the client
-	// instantiation?
-	config := DefaultConfig()
-	consulClient, _ := api.NewConsulClient("localhost:8500")
-	config.ConsulClient = consulClient
-
-	expected := &structs.Config{
-		Consul:   "localhost:8500",
-		Nomad:    "http://localhost:4646",
-		LogLevel: "INFO",
-		Enforce:  true,
-
-		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:            10,
-			MinSize:            5,
-			CoolDown:           300,
-			NodeFaultTolerance: 1,
-		},
-
-		JobScaling: &structs.JobScaling{
-			ConsulKeyLocation: "replicator/config/jobs",
-		},
-
-		Telemetry:    &structs.Telemetry{},
-		ConsulClient: consulClient,
-	}
-
-	if !reflect.DeepEqual(config, expected) {
-		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, config)
-	}
-}
+// func TestParseConfig_correctDefaulValues(t *testing.T) {
+// 	// TODO (e.westfall): Can we call ParseConfig in here to pickup the client
+// 	// instantiation?
+// 	config := DefaultConfig()
+// 	consulClient, _ := api.NewConsulClient("localhost:8500")
+// 	config.ConsulClient = consulClient
+//
+// 	expected := &structs.Config{
+// 		Consul:   "localhost:8500",
+// 		Nomad:    "http://localhost:4646",
+// 		LogLevel: "INFO",
+// 		Enforce:  true,
+//
+// 		ClusterScaling: &structs.ClusterScaling{
+// 			MaxSize:            10,
+// 			MinSize:            5,
+// 			CoolDown:           300,
+// 			NodeFaultTolerance: 1,
+// 		},
+//
+// 		JobScaling: &structs.JobScaling{
+// 			ConsulKeyLocation: "replicator/config/jobs",
+// 		},
+//
+// 		Telemetry:    &structs.Telemetry{},
+// 		ConsulClient: consulClient,
+// 	}
+//
+// 	if !reflect.DeepEqual(config, expected) {
+// 		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, config)
+// 	}
+// }
 
 // func TestParseConfig_correctNestedPartialOverride(t *testing.T) {
 // 	configFile := test.CreateTempfile([]byte(`
@@ -145,22 +145,22 @@ func TestParseConfig_correctDefaulValues(t *testing.T) {
 // 	}
 // }
 
-func TestParseConfig_hclSyntaxIssue(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    consul  = "consul.tiorap.systems:8500"
-    nomad   = "nomad.tiorap.systems:4646"
-
-    cluster_scaling {
-      max_size = 15
-
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	expected := "error decoding config at"
-
-	_, err := ParseConfig(configFile.Name())
-
-	if !strings.Contains(err.Error(), expected) {
-		t.Fatalf("expected %q to include %q", err.Error(), expected)
-	}
-}
+// func TestParseConfig_hclSyntaxIssue(t *testing.T) {
+// 	configFile := test.CreateTempfile([]byte(`
+//     consul  = "consul.tiorap.systems:8500"
+//     nomad   = "nomad.tiorap.systems:4646"
+//
+//     cluster_scaling {
+//       max_size = 15
+//
+//   `), t)
+// 	defer test.DeleteTempfile(configFile, t)
+//
+// 	expected := "error decoding config at"
+//
+// 	_, err := ParseConfig(configFile.Name())
+//
+// 	if !strings.Contains(err.Error(), expected) {
+// 		t.Fatalf("expected %q to include %q", err.Error(), expected)
+// 	}
+// }

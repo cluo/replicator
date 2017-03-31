@@ -13,8 +13,28 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+// Define default local addresses for Consul and Nomad
+const (
+	LocalConsulAddress = "localhost:8500"
+	LocalNomadAddress  = "http://localhost:4646"
+)
+
 // DefaultConfig returns a default configuration struct with sane defaults.
 func DefaultConfig() *structs.Config {
+	// var consulClient structs.ConsulClient
+	// var nomadClient structs.NomadClient
+
+	// Instantiate a new Consul client.
+	consulClient, err := api.NewConsulClient(LocalConsulAddress)
+	if err != nil {
+		logging.Error("failed to obtain consul connection: %v", err)
+	}
+
+	// Instantiate a new Nomad client.
+	nomadClient, err := api.NewNomadClient(LocalNomadAddress)
+	if err != nil {
+		logging.Error("failed to obtain nomad connection: %v", err)
+	}
 
 	return &structs.Config{
 		Consul:   "localhost:8500",
@@ -33,7 +53,9 @@ func DefaultConfig() *structs.Config {
 			ConsulKeyLocation: "replicator/config/jobs",
 		},
 
-		Telemetry: &structs.Telemetry{},
+		Telemetry:    &structs.Telemetry{},
+		ConsulClient: consulClient,
+		NomadClient:  nomadClient,
 	}
 }
 
