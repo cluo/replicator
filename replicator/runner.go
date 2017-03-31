@@ -7,7 +7,6 @@ import (
 	"github.com/elsevier-core-engineering/replicator/api"
 	"github.com/elsevier-core-engineering/replicator/logging"
 	"github.com/elsevier-core-engineering/replicator/replicator/structs"
-	consul "github.com/hashicorp/consul/api"
 )
 
 // Runner is the main runner struct.
@@ -115,7 +114,28 @@ func (r *Runner) clusterScaling() {
 	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
 		fmt.Printf("%v", err)
 	} else {
-		logging.Info("Cluster Scaling Required: %v", scale)
+
+		// If we reached this point we will be performning AWS interaction so we
+		// create an client connection.
+		asgSess := api.NewAWSAsgService(r.config.Region)
+
+		if clusterCapacity.ScalingDirection == api.ScalingDirectionOut {
+			if err := api.ScaleOutCluster(r.config.ClusterScaling.AutoscalingGroup, asgSess); err != nil {
+				logging.Error("unable to successfully scale out cluster: %v", err)
+			}
+		}
+		if clusterCapacity.ScalingDirection == api.ScalingDirectionIn {
+			nodeIP, nodeID := client.LeastAllocatedNode(clusterCapacity)
+			if nodeIP != "" && nodeID != "" {
+				if err := client.DrainNode(nodeID); err == nil {
+					logging.Info("terminating AWS instance %v", nodeID)
+					err := api.ScaleInCluster(r.config.ClusterScaling.AutoscalingGroup, nodeIP, asgSess)
+					if err != nil {
+						logging.Error("unable to successfully terminate AWS instance %v: %v", nodeID, err)
+					}
+				}
+			}
+		}
 	}
 
 	logging.Info("Cluster Capacity: CPU - %v, MEM - %v", clusterCapacity.TotalCapacity.CPUMHz,
@@ -167,13 +187,4 @@ func (r *Runner) jobScaling() {
 			nomadClient.JobScale(job)
 		}
 	}
-}
-
-func (r *Runner) test() {
-	config := consul.DefaultConfig()
-	config.Address = "localhost:8500"
-	c, _ := consul.NewClient(config)
-
-	resp, _ := c.Status().Leader()
-	logging.Info(resp)
 }

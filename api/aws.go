@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/elsevier-core-engineering/consulate/logging"
 )
 
 // DescribeAWSRegion uses the EC2 InstanceMetaData endpoint to discover the AWS
@@ -50,13 +51,13 @@ func DescribeScalingGroup(asgName string, svc *autoscaling.AutoScaling) (asg *au
 
 // ScaleOutCluster scales the Nomad worker pool by 1 instance, using the current
 // configuration as the basis for undertaking the work.
-func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) (bool, error) {
+func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 
 	// Get the current ASG configuration so that we have the basis on which to
 	// update to our new desired state.
 	asg, err := DescribeScalingGroup(asgName, svc)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// The DesiredCapacity is incramented by 1, while the TerminationPolicies and
@@ -82,14 +83,16 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) (bool, error)
 	// want to change in the future.
 	_, err = svc.UpdateAutoScalingGroup(params)
 	if err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // ScaleInCluster scales the cluster size by 1 by using the DetachInstances call
 // to target an instance to remove from the ASG.
-func ScaleInCluster(asgName, instanceID string, svc *autoscaling.AutoScaling) (bool, error) {
+func ScaleInCluster(asgName, instanceIP string, svc *autoscaling.AutoScaling) error {
+
+	instanceID := translateIptoID(instanceIP, *svc.Config.Region)
 
 	// Setup the Input parameters ready for the AWS API call and then trigger the
 	// call which will remove the identified instance from the ASG and decrement
@@ -105,7 +108,7 @@ func ScaleInCluster(asgName, instanceID string, svc *autoscaling.AutoScaling) (b
 
 	resp, err := svc.DetachInstances(params)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// The initial scaling activity StatusCode is available, so we might as well
@@ -116,17 +119,17 @@ func ScaleInCluster(asgName, instanceID string, svc *autoscaling.AutoScaling) (b
 	}
 
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// The instance must now be terminated using the AWS EC2 API.
 	err = terminateInstance(instanceID, *svc.Config.Region)
 
 	if err != nil {
-		return false, fmt.Errorf("an error occured terminating instance %v", instanceID)
+		return fmt.Errorf("an error occured terminating instance %v", instanceID)
 	}
 
-	return true, nil
+	return nil
 }
 
 // CheckClusterScalingTimeThreshold checks the last cluster scaling event time
@@ -228,4 +231,29 @@ func terminateInstance(instanceID, region string) error {
 	}
 
 	return nil
+}
+
+func translateIptoID(ip, region string) (id string) {
+	sess := session.Must(session.NewSession())
+	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})
+
+	params := &ec2.DescribeInstancesInput{
+		DryRun: aws.Bool(false),
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("private-ip-address"),
+				Values: []*string{
+					aws.String(ip),
+				},
+			},
+		},
+	}
+	resp, err := svc.DescribeInstances(params)
+
+	if err != nil {
+		logging.Error("unable to convert nomad instance IP to AWS ID: %v", err)
+		return
+	}
+
+	return *resp.Reservations[0].Instances[0].InstanceId
 }

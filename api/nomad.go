@@ -86,6 +86,7 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	// If current utilization is less than max allowed, check to see if we can
 	// and should scale the cluster in.
 	if clusterUtilization < capacity.MaxAllowedUtilization {
+		capacity.ScalingDirection = ScalingDirectionIn
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionIn) {
 			logging.Info("scaling operation (in) fails to pass the safety check")
 			return
@@ -95,6 +96,7 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	// If current utilization is greater than max allowed, check to see if we can
 	// and should scale the cluster out.
 	if clusterUtilization >= capacity.MaxAllowedUtilization {
+		capacity.ScalingDirection = ScalingDirectionOut
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionOut) {
 			logging.Info("scaling operation (out) fails to pass the safety check")
 			return
@@ -199,6 +201,7 @@ func (c *nomadClient) ClusterAssignedAllocation(clusterInfo *structs.ClusterAllo
 
 		for _, nodeAlloc := range allocations {
 			if (nodeAlloc.ClientStatus == "running") && (nodeAlloc.DesiredStatus == "run") {
+
 				// Add the consumed resources to the overall cluster consumed resource values.
 				clusterInfo.UsedCapacity.CPUMHz += *nodeAlloc.Resources.CPU
 				clusterInfo.UsedCapacity.MemoryMB += *nodeAlloc.Resources.MemoryMB
@@ -351,28 +354,36 @@ func (c *nomadClient) MostUtilizedGroupResource(gsp *structs.GroupScalingPolicy)
 // resource identified as the most-utilized resource across the cluster. Since Nomad follows
 // a bin-packing approach, when we need to remove a worker node in response to a scale-in
 // activity, we want to identify the least-allocated node and target it for removal.
-func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation) (node string) {
+func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation) (nodeID, nodeIP string) {
 	var lowestAllocation float64
 
 	for _, nodeAlloc := range clusterInfo.NodeAllocations {
 		switch clusterInfo.ScalingMetric {
 		case ScalingMetricProcessor:
 			if (lowestAllocation == 0) || (nodeAlloc.UsedCapacity.CPUPercent < lowestAllocation) {
-				node = nodeAlloc.NodeID
+				nodeID = nodeAlloc.NodeID
 				lowestAllocation = nodeAlloc.UsedCapacity.CPUPercent
 			}
 		case ScalingMetricMemory:
 			if (lowestAllocation == 0) || (nodeAlloc.UsedCapacity.MemoryPercent < lowestAllocation) {
-				node = nodeAlloc.NodeID
+				nodeID = nodeAlloc.NodeID
 				lowestAllocation = nodeAlloc.UsedCapacity.MemoryPercent
 			}
 		case ScalingMetricDisk:
 			if (lowestAllocation == 0) || (nodeAlloc.UsedCapacity.DiskPercent < lowestAllocation) {
-				node = nodeAlloc.NodeID
+				nodeID = nodeAlloc.NodeID
 				lowestAllocation = nodeAlloc.UsedCapacity.DiskPercent
 			}
 		}
 	}
+
+	// In order to perform downscaling of the cluster we need to have access
+	// to the nodes IP address so  the AWS instance-id can be infered.
+	resp, _, err := c.nomad.Nodes().Info(nodeID, &nomad.QueryOptions{})
+	if err != nil {
+		logging.Error("unable to ascertain nomad node IP address: %v", err)
+	}
+	nodeIP = resp.Attributes["unique.network.ip-address"]
 
 	return
 }

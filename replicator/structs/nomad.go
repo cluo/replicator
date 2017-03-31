@@ -39,7 +39,7 @@ type NomadClient interface {
 
 	// LeaseAllocatedNode determines the worker node consuming the least amount of
 	// the cluster's mosted-utilized resource.
-	LeastAllocatedNode(*ClusterAllocation) string
+	LeastAllocatedNode(*ClusterAllocation) (string, string)
 
 	// MostUtilizedResource calculates which resource is most-utilized across the
 	// cluster. The worst-case allocation resource is prioritized when making
@@ -50,6 +50,7 @@ type NomadClient interface {
 	// task groups on the cluster.
 	IsJobRunning(string) bool
 
+	// JobScale
 	JobScale(*JobScalingPolicy)
 
 	// TaskAllocationTotals calculates the allocations required by each running
@@ -92,12 +93,19 @@ type ClusterAllocation struct {
 
 	// NodeAllocations is a slice of node allocations.
 	NodeAllocations []*NodeAllocation
+
+	// ScalingDirection is the direction in/out of cluster scaling we require after
+	// performning the proper evalutation. James put this in the wrong place cos he is dumb
+	ScalingDirection string
 }
 
 // NodeAllocation describes the resource consumption of a specific worker node.
 type NodeAllocation struct {
 	// NodeID is the unique ID of the worker node.
 	NodeID string
+
+	// NodeIP is the private IP of the worker node.
+	NodeIP string
 
 	// UsedCapacity represents the percentage of total cluster resources consumed by
 	// the worker node.
