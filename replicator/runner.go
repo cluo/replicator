@@ -38,7 +38,10 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 
-			r.clusterScaling()
+			clusterChan := make(chan bool)
+			go r.clusterScaling(clusterChan)
+			<-clusterChan
+
 			r.jobScaling()
 
 			// TODO: Consolidate cluster scaling into single entry-point method that can
@@ -99,7 +102,7 @@ func (r *Runner) Stop() {
 // clusterScaling is the main entry point into the cluster scaling functionality
 // and ties numerous functions together to create an asynchronus function which
 // can be called from the runner.
-func (r *Runner) clusterScaling() {
+func (r *Runner) clusterScaling(done chan bool) {
 	client := r.config.NomadClient
 
 	if r.config.Region == "" {
@@ -136,12 +139,8 @@ func (r *Runner) clusterScaling() {
 			}
 		}
 	}
-
-	logging.Info("Cluster Capacity: CPU - %v, MEM - %v", clusterCapacity.TotalCapacity.CPUMHz,
-		clusterCapacity.TotalCapacity.MemoryMB)
-	logging.Info("Cluster Usage: CPU - %v, MEM - %v", clusterCapacity.UsedCapacity.CPUPercent,
-		clusterCapacity.UsedCapacity.MemoryPercent)
-	logging.Info("Scaling Metric: %v", clusterCapacity.ScalingMetric)
+	done <- true
+	return
 }
 
 // jobScaling is the main entry point for the Nomad job scaling functionality
