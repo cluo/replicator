@@ -135,12 +135,17 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 			logging.Info("scale-in operation would violate or is too close to the maximum allowed cluster utilization threshold")
 			return
 		}
+	} else if scaleDirection == ScalingDirectionOut {
+		if (capacity.NodeCount + 1) > config.ClusterScaling.MaxSize {
+			logging.Info("scale-out operation would violate declared maximum threshold")
+			return
+		}
 	}
 
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
 	if scale, err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
 		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil || !scale {
-		logging.Info("a scaling operation would violate the scaling cooldown period")
+		logging.Info("scaling cooldown period would be violated or we failed to obtain cooldown statistics")
 		return
 	}
 
@@ -273,7 +278,7 @@ func (c *nomadClient) LeaderCheck() bool {
 // has sufficient available capacity to scale each task by +1 if an increase in capacity
 // is required.
 func (c *nomadClient) TaskAllocationTotals(capacityUsed *structs.ClusterAllocation) error {
-	// TODO: Allow behavior to be configured; restrict this check to only jobs with a
+	// TODO (e.westfall): Allow behavior to be configured; restrict this check to only jobs with a
 	// scaling policy present.
 
 	// Get all jobs across the cluster.
@@ -631,10 +636,6 @@ func MaxAllowedClusterUtilization(capacity *structs.ClusterAllocation, nodeFault
 		allocTotal = capacity.TaskAllocation.CPUMHz
 		capacityTotal = capacity.TotalCapacity.CPUMHz
 	}
-
-	// nodeAvgAlloc := capacityTotal / capacity.NodeCount
-	// maxResource := ((capacityTotal - allocTotal) - (nodeAvgAlloc * nodeFaultTolerance))
-	// maxAllowedUtilization = float64(float64(maxResource)/float64(capacityTotal)) * 100
 
 	nodeAvgAlloc := capacityTotal / capacity.NodeCount
 	if scaleIn {
