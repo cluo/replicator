@@ -1,7 +1,6 @@
 package replicator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/elsevier-core-engineering/replicator/api"
@@ -31,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(1))
+	ticker := time.NewTicker(time.Second * time.Duration(15))
 
 	defer ticker.Stop()
 
@@ -111,10 +110,9 @@ func (r *Runner) clusterScaling() {
 
 	clusterCapacity := &structs.ClusterAllocation{}
 
-	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
-		fmt.Printf("%v", err)
+	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil || !scale {
+		logging.Info("scaling operation not permitted")
 	} else {
-
 		// If we reached this point we will be performning AWS interaction so we
 		// create an client connection.
 		asgSess := api.NewAWSAsgService(r.config.Region)
@@ -125,8 +123,9 @@ func (r *Runner) clusterScaling() {
 			}
 		}
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionIn {
-			nodeIP, nodeID := client.LeastAllocatedNode(clusterCapacity)
+			nodeID, nodeIP := client.LeastAllocatedNode(clusterCapacity)
 			if nodeIP != "" && nodeID != "" {
+				logging.Info("NodeIP: %v, NodeID: %v", nodeIP, nodeID)
 				if err := client.DrainNode(nodeID); err == nil {
 					logging.Info("terminating AWS instance %v", nodeID)
 					err := api.ScaleInCluster(r.config.ClusterScaling.AutoscalingGroup, nodeIP, asgSess)
