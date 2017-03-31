@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/elsevier-core-engineering/consulate/logging"
+	"github.com/elsevier-core-engineering/replicator/logging"
 )
 
 // DescribeAWSRegion uses the EC2 InstanceMetaData endpoint to discover the AWS
