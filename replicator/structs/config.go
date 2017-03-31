@@ -51,11 +51,11 @@ type ClusterScaling struct {
 	// MaxSize in the maximum number of instances the nomad node worker count is
 	// allowed to reach. This stops runaway increases in size due to misbehaviour
 	// but should be set high enough to accomodate usual workload peaks.
-	MaxSize float64 `mapstructure:"max_size"`
+	MaxSize int `mapstructure:"max_size"`
 
 	// MinSize is the minimum number of instances that should be present within
 	// the nomad node worker pool.
-	MinSize float64 `mapstructure:"min_size"`
+	MinSize int `mapstructure:"min_size"`
 
 	// CoolDown is the number of seconds after a scaling activity completes before
 	// another can begin.

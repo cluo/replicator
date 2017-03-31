@@ -40,10 +40,8 @@ func (r *Runner) Start() {
 		select {
 		case <-ticker.C:
 
-			// r.clusterScaling()
-
-			// r.jobScaling()
-			//r.test()
+			r.clusterScaling()
+			r.jobScaling()
 
 			// TODO: Consolidate cluster scaling into single entry-point method that can
 			// be called concurrently. This includes the following:
@@ -116,6 +114,8 @@ func (r *Runner) clusterScaling() {
 
 	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil && !scale {
 		fmt.Printf("%v", err)
+	} else {
+		logging.Info("Cluster Scaling Required: %v", scale)
 	}
 
 	logging.Info("Cluster Capacity: CPU - %v, MEM - %v", clusterCapacity.TotalCapacity.CPUMHz,

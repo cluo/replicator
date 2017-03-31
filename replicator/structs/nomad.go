@@ -73,7 +73,7 @@ type ClusterAllocation struct {
 
 	// MaxAllowedUtilization represents the max allowed cluster utilization after
 	// considering node fault-tolerance and task group scaling overhead.
-	MaxAllowedUtilization float64
+	MaxAllowedUtilization int
 
 	// ClusterTotalAllocationCapacity is the total allocation capacity across the cluster.
 	TotalCapacity AllocationResources
