@@ -27,7 +27,7 @@ const (
 	ScalingDirectionNone = "None"
 )
 
-const scaleInCapacityThreshold = 90.0
+const scaleInCapacityThreshold = 99.0
 const bytesPerMegabyte = 1024000
 
 // Provides a wrapper to the Nomad API package.
@@ -50,7 +50,7 @@ func NewNomadClient(addr string) (structs.NomadClient, error) {
 
 // EvaluateClusterCapacity determines if a cluster scaling operation is required.
 func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocation, config *structs.Config) (scalingRequired bool, err error) {
-	var clusterUtilization int
+	var clusterUtilization, clusterCapacity int
 
 	// Determine total cluster capacity.
 	if err = c.ClusterAllocationCapacity(capacity); err != nil {
@@ -79,18 +79,27 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	switch capacity.ScalingMetric {
 	case ScalingMetricProcessor:
 		clusterUtilization = capacity.UsedCapacity.CPUMHz
+		clusterCapacity = capacity.TotalCapacity.CPUMHz
 	case ScalingMetricMemory:
 		clusterUtilization = capacity.UsedCapacity.MemoryMB
+		clusterCapacity = capacity.TotalCapacity.MemoryMB
 	}
+
+	// TODO: Remove temporary logging.
+	logging.Info("Node Count (Min: %v/Max: %v): %v , CPU: %v, Memory: %v", config.ClusterScaling.MinSize,
+		config.ClusterScaling.MaxSize, capacity.NodeCount, capacity.TotalCapacity.CPUMHz, capacity.TotalCapacity.MemoryMB)
+	logging.Info("Scaling Metric: %v, Cluster Capacity: %v, Cluster Utilization: %v, Max Allowed: %v",
+		capacity.ScalingMetric, clusterCapacity, clusterUtilization, capacity.MaxAllowedUtilization)
 
 	// If current utilization is less than max allowed, check to see if we can
 	// and should scale the cluster in.
 	if clusterUtilization < capacity.MaxAllowedUtilization {
 		capacity.ScalingDirection = ScalingDirectionIn
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionIn) {
-			logging.Info("scaling operation (in) fails to pass the safety check")
+			logging.Info("scaling operation (scale-in) fails to pass the safety check")
 			return
 		}
+		logging.Info("scaling operation (scale-in) passes the safety check and will be permitted")
 	}
 
 	// If current utilization is greater than max allowed, check to see if we can
@@ -98,9 +107,10 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	if clusterUtilization >= capacity.MaxAllowedUtilization {
 		capacity.ScalingDirection = ScalingDirectionOut
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionOut) {
-			logging.Info("scaling operation (out) fails to pass the safety check")
+			logging.Info("scaling operation (scale-out) fails to pass the safety check")
 			return
 		}
+		logging.Info("scaling operation (scale-out) passes the safety check and will be permitted")
 	}
 
 	return true, nil
@@ -121,7 +131,7 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 		// Determine if removing a node would violate safety thresholds or declared minimums
 		if (capacity.NodeCount <= 1) || ((capacity.NodeCount - 1) < config.ClusterScaling.MinSize) {
 			logging.Info("scale-in operation would violate safety thresholds or declared minimums")
-			return
+			// return
 		}
 
 		// Calculate the new maximum allowed cluster utilization if we were to remove a node.
@@ -135,12 +145,12 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 		// Evaluate utilization against new maximum allowed threshold and stop if a violation is present.
 		if (clusterUsedCapacity >= newMaxAllowedUtilization) || (newClusterUtilization >= scaleInCapacityThreshold) {
 			logging.Info("scale-in operation would violate or is too close to the maximum allowed cluster utilization threshold")
-			return
+			// return
 		}
 	} else if scaleDirection == ScalingDirectionOut {
 		if (capacity.NodeCount + 1) > config.ClusterScaling.MaxSize {
 			logging.Info("scale-out operation would violate declared maximum threshold")
-			return
+			// return
 		}
 	}
 
@@ -463,7 +473,6 @@ func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 		if group.Scaling.ScaleDirection != "None" {
 
 			for i, taskGroup := range jobResp.TaskGroups {
-
 				if group.Scaling.ScaleDirection == "Out" && *taskGroup.Count >= group.Scaling.Max ||
 					group.Scaling.ScaleDirection == "In" && *taskGroup.Count <= group.Scaling.Min {
 					logging.Info("scale %v not permitted due to constraints on job \"%v\" and group \"%v\"",

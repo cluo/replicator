@@ -30,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(15))
+	ticker := time.NewTicker(time.Second * time.Duration(5))
 
 	defer ticker.Stop()
 
@@ -104,6 +104,7 @@ func (r *Runner) Stop() {
 // can be called from the runner.
 func (r *Runner) clusterScaling(done chan bool) {
 	client := r.config.NomadClient
+	scalingEnabled := r.config.ClusterScaling.Enabled
 
 	if r.config.Region == "" {
 		if region, err := api.DescribeAWSRegion(); err == nil {
@@ -121,6 +122,11 @@ func (r *Runner) clusterScaling(done chan bool) {
 		asgSess := api.NewAWSAsgService(r.config.Region)
 
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionOut {
+			if !scalingEnabled {
+				logging.Info("cluster scaling disabled, not initiating scaling operation (scale-out)")
+				done <- true
+				return
+			}
 			if err := api.ScaleOutCluster(r.config.ClusterScaling.AutoscalingGroup, asgSess); err != nil {
 				logging.Error("unable to successfully scale out cluster: %v", err)
 			}
@@ -130,6 +136,11 @@ func (r *Runner) clusterScaling(done chan bool) {
 			nodeID, nodeIP := client.LeastAllocatedNode(clusterCapacity)
 			if nodeIP != "" && nodeID != "" {
 				logging.Info("NodeIP: %v, NodeID: %v", nodeIP, nodeID)
+				if !scalingEnabled {
+					logging.Info("cluster scaling disabled, not initiating scaling operation (scale-in)")
+					done <- true
+					return
+				}
 				if err := client.DrainNode(nodeID); err == nil {
 					logging.Info("terminating AWS instance %v", nodeIP)
 					err := api.ScaleInCluster(r.config.ClusterScaling.AutoscalingGroup, nodeIP, asgSess)
