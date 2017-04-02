@@ -430,7 +430,7 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 	for {
 		select {
 		case <-timeout:
-			logging.Info("timeout %v reached while waiting for existing allocations to be migrated from node %v\n",
+			logging.Info("timeout %v reached while waiting for existing allocations to be migrated from node %v",
 				timeout, nodeID)
 			return nil
 		case <-ticker.C:
@@ -451,11 +451,11 @@ func (c *nomadClient) DrainNode(nodeID string) (err error) {
 			}
 
 			if activeAllocations == 0 {
-				logging.Info("node %v has no active allocations\n", nodeID)
+				logging.Info("node %v has no active allocations", nodeID)
 				return nil
 			}
 
-			logging.Info("node %v has %v active allocations, pausing and will re-poll allocations\n", nodeID, activeAllocations)
+			logging.Info("node %v has %v active allocations, pausing and will re-poll allocations", nodeID, activeAllocations)
 		}
 	}
 }
@@ -668,6 +668,8 @@ func MaxAllowedClusterUtilization(capacity *structs.ClusterAllocation, nodeFault
 	if scaleIn {
 		capacityTotal = capacityTotal - nodeAvgAlloc
 	}
+
+	logging.Info("Node Average Capacity: %v, Scaling Overhead: %v", nodeAvgAlloc, allocTotal)
 
 	maxAllowedUtilization = ((capacityTotal - allocTotal) - (nodeAvgAlloc * nodeFaultTolerance))
 
