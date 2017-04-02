@@ -135,7 +135,7 @@ func ScaleInCluster(asgName, instanceIP string, svc *autoscaling.AutoScaling) er
 // CheckClusterScalingTimeThreshold checks the last cluster scaling event time
 // and compares against the cooldown period to determine whether or not a
 // cluster scaling event can happen.
-func CheckClusterScalingTimeThreshold(cooldown int, asgName string, svc *autoscaling.AutoScaling) (bool, error) {
+func CheckClusterScalingTimeThreshold(cooldown float64, asgName string, svc *autoscaling.AutoScaling) (bool, error) {
 
 	// Only supply the ASG name as we want to see all the recent scaling activity
 	// to be able to make the correct descision.
@@ -255,6 +255,5 @@ func translateIptoID(ip, region string) (id string) {
 		return
 	}
 
-	logging.Info("Response: %v", resp)
 	return *resp.Reservations[0].Instances[0].InstanceId
 }

@@ -127,6 +127,9 @@ func (r *Runner) clusterScaling(done chan bool) {
 				done <- true
 				return
 			}
+
+			clusterCapacity.LastScalingEvent = time.Now()
+
 			if err := api.ScaleOutCluster(r.config.ClusterScaling.AutoscalingGroup, asgSess); err != nil {
 				logging.Error("unable to successfully scale out cluster: %v", err)
 			}

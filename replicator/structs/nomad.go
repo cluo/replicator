@@ -1,6 +1,8 @@
 package structs
 
 import (
+	"time"
+
 	nomad "github.com/hashicorp/nomad/api"
 )
 
@@ -95,8 +97,11 @@ type ClusterAllocation struct {
 	NodeAllocations []*NodeAllocation
 
 	// ScalingDirection is the direction in/out of cluster scaling we require after
-	// performning the proper evalutation. James put this in the wrong place cos he is dumb
+	// performning the proper evalutation.
 	ScalingDirection string
+
+	// LastScalingEvent represents the last time the daemon attempted a scaling action.
+	LastScalingEvent time.Time
 }
 
 // NodeAllocation describes the resource consumption of a specific worker node.

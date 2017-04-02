@@ -27,7 +27,7 @@ const (
 	ScalingDirectionNone = "None"
 )
 
-const scaleInCapacityThreshold = 99.0
+const scaleInCapacityThreshold = 90.0
 const bytesPerMegabyte = 1024000
 
 // Provides a wrapper to the Nomad API package.
@@ -110,6 +110,7 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 			logging.Info("scaling operation (scale-out) fails to pass the safety check")
 			return
 		}
+
 		logging.Info("scaling operation (scale-out) passes the safety check and will be permitted")
 	}
 
@@ -119,6 +120,8 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 // CheckClusterScalingSafety determines if a cluster scaling operation can be safely executed.
 func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocation, config *structs.Config, scaleDirection string) (safe bool) {
 	var clusterUsedCapacity int
+
+	lastScalingEvent := time.Since(capacity.LastScalingEvent).Seconds()
 
 	switch capacity.ScalingMetric {
 	case ScalingMetricProcessor:
@@ -131,7 +134,7 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 		// Determine if removing a node would violate safety thresholds or declared minimums
 		if (capacity.NodeCount <= 1) || ((capacity.NodeCount - 1) < config.ClusterScaling.MinSize) {
 			logging.Info("scale-in operation would violate safety thresholds or declared minimums")
-			// return
+			return
 		}
 
 		// Calculate the new maximum allowed cluster utilization if we were to remove a node.
@@ -145,13 +148,19 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 		// Evaluate utilization against new maximum allowed threshold and stop if a violation is present.
 		if (clusterUsedCapacity >= newMaxAllowedUtilization) || (newClusterUtilization >= scaleInCapacityThreshold) {
 			logging.Info("scale-in operation would violate or is too close to the maximum allowed cluster utilization threshold")
-			// return
+			return
 		}
 	} else if scaleDirection == ScalingDirectionOut {
 		if (capacity.NodeCount + 1) > config.ClusterScaling.MaxSize {
 			logging.Info("scale-out operation would violate declared maximum threshold")
-			// return
+			return
 		}
+	}
+
+	// Determine if performing a scaling operation would violate the cooldown period.
+	if (!capacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= config.ClusterScaling.CoolDown) {
+		logging.Info("scaling cooldown period would be violated")
+		return
 	}
 
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
@@ -182,7 +191,7 @@ func (c *nomadClient) ClusterAllocationCapacity(capacity *structs.ClusterAllocat
 			return err
 		}
 
-		if (resp.Status == "ready") || (resp.Drain != true) {
+		if (resp.Status == "ready") && (resp.Drain != true) {
 			capacity.NodeCount++
 			capacity.NodeList = append(capacity.NodeList, node.ID)
 			capacity.TotalCapacity.CPUMHz += *resp.Resources.CPU

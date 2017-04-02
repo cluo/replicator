@@ -59,7 +59,7 @@ type ClusterScaling struct {
 
 	// CoolDown is the number of seconds after a scaling activity completes before
 	// another can begin.
-	CoolDown int `mapstructure:"cool_down"`
+	CoolDown float64 `mapstructure:"cool_down"`
 
 	// NodeFaultTolerance is the number of Nomad worker nodes the cluster can
 	// support losing, whilst still maintaining all existing workload.
