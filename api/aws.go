@@ -180,6 +180,7 @@ func CheckClusterScalingTimeThreshold(cooldown float64, asgName string, svc *aut
 	// or not it was successful; it was still a scaling event. Times from AWS are
 	// based on UTC, and so the current time does the same.
 	timeThreshold := time.Now().UTC().Add(-time.Second * time.Duration(cooldown))
+	// TODO: This causes a seg fault after a scale-out operation and needs fixed.
 	lastActivity := *resp.Activities[0].EndTime
 
 	// Compare the two dates to see if the current time minus the cooldown is
