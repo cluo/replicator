@@ -157,18 +157,10 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 		}
 	}
 
-	// Determine if performing a scaling operation would violate the cooldown period.
-	// lastScalingEvent := time.Since(capacity.LastScalingEvent).Seconds()
-	// logging.Info("Last Scaling: %v, Seconds: %v", capacity.LastScalingEvent, lastScalingEvent)
-	// if lastScalingEvent <= config.ClusterScaling.CoolDown {
-	// 	logging.Info("Scaling event is too close to the last scaling event: %v", lastScalingEvent)
-	// 	return
-	// }
-
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
-	if scale, err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
-		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil || !scale {
-		logging.Info("scaling cooldown period would be violated or we failed to obtain cooldown statistics")
+	if err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
+		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil {
+		logging.Info("%v", err)
 		return
 	}
 

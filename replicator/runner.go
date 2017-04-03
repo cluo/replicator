@@ -30,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(5))
+	ticker := time.NewTicker(time.Second * time.Duration(10))
 
 	defer ticker.Stop()
 
@@ -44,50 +44,6 @@ func (r *Runner) Start() {
 
 			r.jobScaling()
 
-			// TODO: Consolidate cluster scaling into single entry-point method that can
-			// be called concurrently. This includes the following:
-			// - ClusterAllocationCapacity
-			// - ClusterAssignedAllocation
-			// - TaskAllocationTotals
-			// - api.PercentageCapacityRequired
-			// - MostUtilizedResource
-			// - CheckClusterScalingTimeThreshold (only required for scaling operations)
-			// - LeastAllocatedNode (Only required for scale-in operations)
-			// - DrainNode (Only required for scale-in operations)
-			// - ScaleOutCluster, ScaleInCluster
-
-			// client.ClusterAllocationCapacity(allocs)
-			// client.ClusterAssignedAllocation(allocs)
-			//
-			// for _, nodeAllocs := range allocs.NodeAllocations {
-			// 	logging.Info("Node ID: %v, CPU Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.CPUPercent)
-			// 	logging.Info("Node ID: %v, Mem Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.MemoryPercent)
-			// 	logging.Info("Node ID: %v, Disk Percent: %v", nodeAllocs.NodeID, nodeAllocs.UsedCapacity.DiskPercent)
-			// }
-			//
-			// client.TaskAllocationTotals(allocs)
-			// client.MostUtilizedResource(allocs)
-			// logging.Info("Scaling Metric: %v", allocs.ScalingMetric)
-			//
-			// res := api.PercentageCapacityRequired(allocs.NodeCount, allocs.TaskAllocation.CPUMHz, allocs.TotalCapacity.CPUMHz, allocs.UsedCapacity.CPUMHz, 2)
-			// logging.Info("precentage cluster capactity required: %v", res)
-			//
-			// logging.Info("Node Count: %v", allocs.NodeCount)
-			// logging.Info("CPU: %v %v", allocs.UsedCapacity.CPUMHz, allocs.TotalCapacity.CPUMHz)
-			// logging.Info("Memory: %v %v", allocs.UsedCapacity.MemoryMB, allocs.TotalCapacity.MemoryMB)
-			// logging.Info("Disk: %v %v", allocs.UsedCapacity.DiskMB, allocs.TotalCapacity.DiskMB)
-			//
-			// // TODO: Move this check to the beginning and halt execution for this cycle if we do not
-			// // have cluster leadership.
-			// if client.LeaderCheck() {
-			// 	logging.Info("We have cluster leadership.")
-			// }
-			//
-			//
-			// target := client.LeastAllocatedNode(allocs)
-			// logging.Info("Least Allocated Node: %v", target)
-			// // client.DrainNode(target)
-			logging.Info("%v", RuntimeStats())
 		case <-r.doneChan:
 			return
 		}
@@ -128,8 +84,6 @@ func (r *Runner) clusterScaling(done chan bool) {
 				return
 			}
 
-			logging.Info("would have initiated scale-out operation here")
-			// clusterCapacity.LastScalingEvent = time.Now()
 			if err := api.ScaleOutCluster(r.config.ClusterScaling.AutoscalingGroup, asgSess); err != nil {
 				logging.Error("unable to successfully scale out cluster: %v", err)
 			}
@@ -144,15 +98,6 @@ func (r *Runner) clusterScaling(done chan bool) {
 					done <- true
 					return
 				}
-
-				// if (!clusterCapacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= r.config.ClusterScaling.CoolDown) {
-				// 	logging.Info("cluster scaling operation (scale-in) would violate cooldown period")
-				// 	done <- true
-				// 	return
-				// }
-
-				logging.Info("would have initiated node draining and scale-in here")
-				// clusterCapacity.LastScalingEvent = time.Now()
 
 				if err := client.DrainNode(nodeID); err == nil {
 					logging.Info("terminating AWS instance %v", nodeIP)
