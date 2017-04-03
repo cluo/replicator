@@ -117,13 +117,9 @@ func (r *Runner) clusterScaling(done chan bool) {
 	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil || !scale {
 		logging.Info("scaling operation not required or permitted")
 	} else {
-		// If we reached this point we will be performning AWS interaction so we
+		// If we reached this point we will be performing AWS interaction so we
 		// create an client connection.
 		asgSess := api.NewAWSAsgService(r.config.Region)
-
-		// Calculate the number of seconds since we last attempted a scaling event.
-		lastScalingEvent := time.Since(clusterCapacity.LastScalingEvent).Seconds()
-		logging.Info("Last Scaling: %v", lastScalingEvent)
 
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionOut {
 			if !scalingEnabled {
@@ -132,14 +128,8 @@ func (r *Runner) clusterScaling(done chan bool) {
 				return
 			}
 
-			if (!clusterCapacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= r.config.ClusterScaling.CoolDown) {
-				logging.Info("cluster scaling operation (scale-out) would violate cooldown period")
-				done <- true
-				return
-			}
-
-			clusterCapacity.LastScalingEvent = time.Now()
-
+			logging.Info("would have initiated scale-out operation here")
+			// clusterCapacity.LastScalingEvent = time.Now()
 			if err := api.ScaleOutCluster(r.config.ClusterScaling.AutoscalingGroup, asgSess); err != nil {
 				logging.Error("unable to successfully scale out cluster: %v", err)
 			}
@@ -155,13 +145,14 @@ func (r *Runner) clusterScaling(done chan bool) {
 					return
 				}
 
-				if (!clusterCapacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= r.config.ClusterScaling.CoolDown) {
-					logging.Info("cluster scaling operation (scale-out) would violate cooldown period")
-					done <- true
-					return
-				}
+				// if (!clusterCapacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= r.config.ClusterScaling.CoolDown) {
+				// 	logging.Info("cluster scaling operation (scale-in) would violate cooldown period")
+				// 	done <- true
+				// 	return
+				// }
 
-				clusterCapacity.LastScalingEvent = time.Now()
+				logging.Info("would have initiated node draining and scale-in here")
+				// clusterCapacity.LastScalingEvent = time.Now()
 
 				if err := client.DrainNode(nodeID); err == nil {
 					logging.Info("terminating AWS instance %v", nodeIP)

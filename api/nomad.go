@@ -114,14 +114,14 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 		logging.Info("scaling operation (scale-out) passes the safety check and will be permitted")
 	}
 
+	logging.Info("Last Scaling (in api): %v", capacity.LastScalingEvent)
+
 	return true, nil
 }
 
 // CheckClusterScalingSafety determines if a cluster scaling operation can be safely executed.
 func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocation, config *structs.Config, scaleDirection string) (safe bool) {
 	var clusterUsedCapacity int
-
-	lastScalingEvent := time.Since(capacity.LastScalingEvent).Seconds()
 
 	switch capacity.ScalingMetric {
 	case ScalingMetricProcessor:
@@ -158,10 +158,12 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 	}
 
 	// Determine if performing a scaling operation would violate the cooldown period.
-	if (!capacity.LastScalingEvent.IsZero()) && (lastScalingEvent <= config.ClusterScaling.CoolDown) {
-		logging.Info("scaling cooldown period would be violated")
-		return
-	}
+	// lastScalingEvent := time.Since(capacity.LastScalingEvent).Seconds()
+	// logging.Info("Last Scaling: %v, Seconds: %v", capacity.LastScalingEvent, lastScalingEvent)
+	// if lastScalingEvent <= config.ClusterScaling.CoolDown {
+	// 	logging.Info("Scaling event is too close to the last scaling event: %v", lastScalingEvent)
+	// 	return
+	// }
 
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
 	if scale, err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,

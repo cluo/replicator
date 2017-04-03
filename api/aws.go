@@ -85,6 +85,33 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 	if err != nil {
 		return err
 	}
+
+	// Setup a ticker to poll the autoscaling group and report when an instance
+	// has been successfully launched.
+	ticker := time.NewTicker(time.Millisecond * 500)
+	timeout := time.Tick(time.Minute * 3)
+
+	for {
+		select {
+		case <-timeout:
+			logging.Info("timeout %v reached while waiting for autoscaling group %v",
+				timeout, asgName)
+			return nil
+		case <-ticker.C:
+			asg, err := DescribeScalingGroup(asgName, svc)
+			if err != nil {
+				logging.Error("an error occurred while attempting to check autoscaling group: %v", err)
+			} else {
+				if len(asg.AutoScalingGroups[0].Instances) == int(newDesiredCapacity) {
+					logging.Info("Scaling operation (scale-out) has been successfully verified")
+					return nil
+				}
+
+				logging.Info("Scaling operation (scale-out) has not been successfully verified, pausing and will re-check")
+			}
+		}
+	}
+
 	return nil
 }
 
