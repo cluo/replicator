@@ -4,14 +4,37 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/elsevier-core-engineering/replicator/config/structs"
+	"github.com/elsevier-core-engineering/replicator/api"
+	"github.com/elsevier-core-engineering/replicator/logging"
+	"github.com/elsevier-core-engineering/replicator/replicator/structs"
+
 	conf "github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/hcl"
 	"github.com/mitchellh/mapstructure"
 )
 
+// Define default local addresses for Consul and Nomad
+const (
+	LocalConsulAddress = "localhost:8500"
+	LocalNomadAddress  = "http://localhost:4646"
+)
+
 // DefaultConfig returns a default configuration struct with sane defaults.
 func DefaultConfig() *structs.Config {
+	// var consulClient structs.ConsulClient
+	// var nomadClient structs.NomadClient
+
+	// Instantiate a new Consul client.
+	consulClient, err := api.NewConsulClient(LocalConsulAddress)
+	if err != nil {
+		logging.Error("failed to obtain consul connection: %v", err)
+	}
+
+	// Instantiate a new Nomad client.
+	nomadClient, err := api.NewNomadClient(LocalNomadAddress)
+	if err != nil {
+		logging.Error("failed to obtain nomad connection: %v", err)
+	}
 
 	return &structs.Config{
 		Consul:   "localhost:8500",
@@ -20,16 +43,19 @@ func DefaultConfig() *structs.Config {
 		Enforce:  true,
 
 		ClusterScaling: &structs.ClusterScaling{
-			MaxSize:  10,
-			MinSize:  5,
-			CoolDown: 300,
+			MaxSize:            10,
+			MinSize:            5,
+			CoolDown:           300,
+			NodeFaultTolerance: 1,
 		},
 
 		JobScaling: &structs.JobScaling{
 			ConsulKeyLocation: "replicator/config/jobs",
 		},
 
-		Telemetry: &structs.Telemetry{},
+		Telemetry:    &structs.Telemetry{},
+		ConsulClient: consulClient,
+		NomadClient:  nomadClient,
 	}
 }
 
@@ -90,6 +116,20 @@ func ParseConfig(path string) (*structs.Config, error) {
 	d := DefaultConfig()
 	d.Merge(c)
 	c = d
+
+	// Instantiate a new Consul client.
+	if consulClient, err := api.NewConsulClient(c.Consul); err == nil {
+		c.ConsulClient = consulClient
+	} else {
+		logging.Error("failed to establish a new consul client: %v", err)
+	}
+
+	// Instantiate a new Nomad client.
+	if nomadClient, err := api.NewNomadClient(c.Nomad); err == nil {
+		c.NomadClient = nomadClient
+	} else {
+		logging.Error("failed to establish a new nomad client: %v", err)
+	}
 
 	return c, nil
 }

@@ -18,6 +18,9 @@ type Config struct {
 	// actioned, or whether the application runs in report only mode.
 	Enforce bool `mapstructure:"enforce"`
 
+	// Region represents the AWS region the cluster resides in.
+	Region string `mapstructure:"aws_region"`
+
 	// ClusterScaling is the configuration struct that controls the basic Nomad
 	// worker node scaling.
 	ClusterScaling *ClusterScaling `mapstructure:"cluster_scaling"`
@@ -31,27 +34,46 @@ type Config struct {
 
 	// setKeys is the list of config keys that were overridden by the user.
 	SetKeys map[string]struct{}
+
+	// ConsulClient provides a client to interact with the Consul API.
+	ConsulClient ConsulClient
+
+	// NomadClient provides a client to interact with the Nomad API.
+	NomadClient NomadClient
 }
 
 // ClusterScaling is the configuration struct for the Nomad worker node scaling
 // activites.
 type ClusterScaling struct {
+	// Enabled indicates whether cluster scaling actions are permitted.
+	Enabled bool `mapstructure:"enabled"`
+
 	// MaxSize in the maximum number of instances the nomad node worker count is
 	// allowed to reach. This stops runaway increases in size due to misbehaviour
 	// but should be set high enough to accomodate usual workload peaks.
-	MaxSize float64 `mapstructure:"max_size"`
+	MaxSize int `mapstructure:"max_size"`
 
 	// MinSize is the minimum number of instances that should be present within
 	// the nomad node worker pool.
-	MinSize float64 `mapstructure:"min_size"`
+	MinSize int `mapstructure:"min_size"`
 
 	// CoolDown is the number of seconds after a scaling activity completes before
 	// another can begin.
 	CoolDown float64 `mapstructure:"cool_down"`
+
+	// NodeFaultTolerance is the number of Nomad worker nodes the cluster can
+	// support losing, whilst still maintaining all existing workload.
+	NodeFaultTolerance int `mapstructure:"node_fault_tolerance"`
+
+	// AutoscalingGroup is the name of the ASG assigned to the Nomad worker nodes.
+	AutoscalingGroup string `mapstructure:"autoscaling_group"`
 }
 
 // JobScaling is the configuration struct for the Nomad job scaling activities.
 type JobScaling struct {
+	// Enabled indicates whether job scaling actions are permitted.
+	Enabled bool `mapstructure:"enabled"`
+
 	// ConsulToken is the Consul ACL token used to access KeyValues from a
 	// secure Consul installation.
 	ConsulToken string `mapstructure:"consul_token"`
@@ -91,10 +113,19 @@ func (c *Config) Merge(o *Config) {
 	if o.WasSet("log_level") {
 		c.LogLevel = o.LogLevel
 	}
+	if o.WasSet("aws_region") {
+		c.Region = o.Region
+	}
 	if o.WasSet("enforce") {
 		c.Enforce = o.Enforce
 	}
 	if o.WasSet("cluster_scaling") {
+		if o.WasSet("cluster_scaling.enabled") {
+			c.ClusterScaling.Enabled = o.ClusterScaling.Enabled
+		}
+		if o.WasSet("cluster_scaling.autoscaling_group") {
+			c.ClusterScaling.AutoscalingGroup = o.ClusterScaling.AutoscalingGroup
+		}
 		if o.WasSet("cluster_scaling.max_size") {
 			c.ClusterScaling.MaxSize = o.ClusterScaling.MaxSize
 		}
@@ -104,8 +135,14 @@ func (c *Config) Merge(o *Config) {
 		if o.WasSet("cluster_scaling.cool_down") {
 			c.ClusterScaling.CoolDown = o.ClusterScaling.CoolDown
 		}
+		if o.WasSet("cluster_scaling.node_fault_tolerance") {
+			c.ClusterScaling.NodeFaultTolerance = o.ClusterScaling.NodeFaultTolerance
+		}
 	}
 	if o.WasSet("job_scaling") {
+		if o.WasSet("job_scaling.enabled") {
+			c.JobScaling.Enabled = o.JobScaling.Enabled
+		}
 		if o.WasSet("job_scaling.consul_token") {
 			c.JobScaling.ConsulToken = o.JobScaling.ConsulToken
 		}
