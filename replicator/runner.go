@@ -30,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(3))
+	ticker := time.NewTicker(time.Second * time.Duration(10))
 
 	defer ticker.Stop()
 
