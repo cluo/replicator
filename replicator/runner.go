@@ -30,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(10))
+	ticker := time.NewTicker(time.Second * time.Duration(3))
 
 	defer ticker.Stop()
 
@@ -59,8 +59,15 @@ func (r *Runner) Stop() {
 // and ties numerous functions together to create an asynchronus function which
 // can be called from the runner.
 func (r *Runner) clusterScaling(done chan bool) {
-	client := r.config.NomadClient
+	nomadClient := r.config.NomadClient
 	scalingEnabled := r.config.ClusterScaling.Enabled
+
+	// Determine if we are running on the leader node, halt if not.
+	if haveLeadership := nomadClient.LeaderCheck(); !haveLeadership {
+		logging.Info("replicator is not running on the known leader, no cluster scaling actions will be taken")
+		done <- true
+		return
+	}
 
 	if r.config.Region == "" {
 		if region, err := api.DescribeAWSRegion(); err == nil {
@@ -70,7 +77,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 
 	clusterCapacity := &structs.ClusterAllocation{}
 
-	if scale, err := client.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil || !scale {
+	if scale, err := nomadClient.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil || !scale {
 		logging.Info("scaling operation not required or permitted")
 	} else {
 		// If we reached this point we will be performing AWS interaction so we
@@ -90,7 +97,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 		}
 
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionIn {
-			nodeID, nodeIP := client.LeastAllocatedNode(clusterCapacity)
+			nodeID, nodeIP := nomadClient.LeastAllocatedNode(clusterCapacity)
 			if nodeIP != "" && nodeID != "" {
 				logging.Info("NodeIP: %v, NodeID: %v", nodeIP, nodeID)
 				if !scalingEnabled {
@@ -99,7 +106,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 					return
 				}
 
-				if err := client.DrainNode(nodeID); err == nil {
+				if err := nomadClient.DrainNode(nodeID); err == nil {
 					logging.Info("terminating AWS instance %v", nodeIP)
 					err := api.ScaleInCluster(r.config.ClusterScaling.AutoscalingGroup, nodeIP, asgSess)
 					if err != nil {
@@ -122,6 +129,12 @@ func (r *Runner) jobScaling() {
 	consulClient := r.config.ConsulClient
 
 	nomadClient := r.config.NomadClient
+
+	// Determine if we are running on the leader node, halt if not.
+	if haveLeadership := nomadClient.LeaderCheck(); !haveLeadership {
+		logging.Info("replicator is not running on the known leader, no job scaling actions will be taken")
+		return
+	}
 
 	// Pull the list of all currently running jobs which have an enabled scaling
 	// document.
