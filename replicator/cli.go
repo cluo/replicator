@@ -106,7 +106,7 @@ func (cli *CLI) Run(args []string) int {
 // object.
 func (cli *CLI) setup(args []string) (*structs.Config, error) {
 
-	file := "/etc/consulate.d/consulate.hcl"
+	file := "/etc/replicator.d/replicator.hcl"
 	var c *structs.Config
 	var err error
 
