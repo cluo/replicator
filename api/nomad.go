@@ -159,7 +159,7 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
 	if err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
 		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil {
-		logging.Info("%v", err)
+		logging.Debug("%v", err)
 		return
 	}
 
