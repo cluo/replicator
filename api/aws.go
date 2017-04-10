@@ -105,7 +105,7 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 				logging.Error("an error occurred while attempting to check autoscaling group: %v", err)
 			} else {
 				if len(asg.AutoScalingGroups[0].Instances) == int(newDesiredCapacity) {
-					logging.Info("Scaling operation (scale-out) has been successfully verified")
+					logging.Info("scaling operation (scale-out) has been successfully verified")
 					return nil
 				}
 			}

@@ -64,7 +64,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 
 	// Determine if we are running on the leader node, halt if not.
 	if haveLeadership := nomadClient.LeaderCheck(); !haveLeadership {
-		logging.Info("replicator is not running on the known leader, no cluster scaling actions will be taken")
+		logging.Debug("replicator is not running on the known leader, no cluster scaling actions will be taken")
 		done <- true
 		return
 	}
@@ -78,7 +78,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 	clusterCapacity := &structs.ClusterAllocation{}
 
 	if scale, err := nomadClient.EvaluateClusterCapacity(clusterCapacity, r.config); err != nil || !scale {
-		logging.Info("scaling operation not required or permitted")
+		logging.Debug("scaling operation not required or permitted")
 	} else {
 		// If we reached this point we will be performing AWS interaction so we
 		// create an client connection.
@@ -86,7 +86,7 @@ func (r *Runner) clusterScaling(done chan bool) {
 
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionOut {
 			if !scalingEnabled {
-				logging.Info("cluster scaling disabled, not initiating scaling operation (scale-out)")
+				logging.Debug("cluster scaling disabled, not initiating scaling operation (scale-out)")
 				done <- true
 				return
 			}
@@ -99,9 +99,8 @@ func (r *Runner) clusterScaling(done chan bool) {
 		if clusterCapacity.ScalingDirection == api.ScalingDirectionIn {
 			nodeID, nodeIP := nomadClient.LeastAllocatedNode(clusterCapacity)
 			if nodeIP != "" && nodeID != "" {
-				logging.Info("NodeIP: %v, NodeID: %v", nodeIP, nodeID)
 				if !scalingEnabled {
-					logging.Info("cluster scaling disabled, not initiating scaling operation (scale-in)")
+					logging.Debug("cluster scaling disabled, not initiating scaling operation (scale-in)")
 					done <- true
 					return
 				}
@@ -132,7 +131,7 @@ func (r *Runner) jobScaling() {
 
 	// Determine if we are running on the leader node, halt if not.
 	if haveLeadership := nomadClient.LeaderCheck(); !haveLeadership {
-		logging.Info("replicator is not running on the known leader, no job scaling actions will be taken")
+		logging.Debug("replicator is not running on the known leader, no job scaling actions will be taken")
 		return
 	}
 
