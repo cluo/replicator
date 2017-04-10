@@ -482,6 +482,8 @@ func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 					return
 				}
 
+				logging.Info("job scaling %v will now be actioned on job \"%v\" and group \"%v\"",
+					group.Scaling.ScaleDirection, scalingDoc.JobName, group.GroupName)
 				// Depending on the scaling direction decrement/incrament the count;
 				// currently replicator only supports addition/subtraction of 1.
 				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "Out" {
@@ -494,7 +496,6 @@ func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 			}
 		}
 	}
-
 	// Nomad 0.5.5 introduced a Jobs.Validate endpoint within the API package
 	// which validates the job syntax before submition.
 	_, _, err = c.nomad.Jobs().Validate(jobResp, &nomad.WriteOptions{})

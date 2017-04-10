@@ -155,7 +155,7 @@ func (r *Runner) jobScaling() {
 
 		for _, group := range job.GroupScalingPolicies {
 			if group.Scaling.ScaleDirection == "Out" || group.Scaling.ScaleDirection == "In" {
-				logging.Info("scale %v to be requested on job \"%v\" and group \"%v\"", group.Scaling.ScaleDirection, job.JobName, group.GroupName)
+				logging.Debug("scale %v to be requested on job \"%v\" and group \"%v\"", group.Scaling.ScaleDirection, job.JobName, group.GroupName)
 				i++
 			}
 		}
