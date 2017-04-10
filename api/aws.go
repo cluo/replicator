@@ -93,7 +93,7 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 	ticker := time.NewTicker(time.Millisecond * 500)
 	timeout := time.Tick(time.Minute * 3)
 
-	logging.Info("cluster scaling operation (scale-out) will now be verfied, this may take a few minutes...")
+	logging.Info("cluster scaling operation (scale-out) will now be verified, this may take a few minutes...")
 
 	for {
 		select {
