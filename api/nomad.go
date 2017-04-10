@@ -85,10 +85,9 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 		clusterCapacity = capacity.TotalCapacity.MemoryMB
 	}
 
-	// TODO: Remove temporary logging.
-	logging.Info("Node Count (Min: %v/Max: %v): %v , CPU: %v, Memory: %v", config.ClusterScaling.MinSize,
+	logging.Debug("Node Count (Min: %v/Max: %v): %v , CPU: %v, Memory: %v", config.ClusterScaling.MinSize,
 		config.ClusterScaling.MaxSize, capacity.NodeCount, capacity.TotalCapacity.CPUMHz, capacity.TotalCapacity.MemoryMB)
-	logging.Info("Scaling Metric: %v, Cluster Capacity: %v, Cluster Utilization: %v, Max Allowed: %v",
+	logging.Debug("Scaling Metric: %v, Cluster Capacity: %v, Cluster Utilization: %v, Max Allowed: %v",
 		capacity.ScalingMetric, clusterCapacity, clusterUtilization, capacity.MaxAllowedUtilization)
 
 	// If current utilization is less than max allowed, check to see if we can
@@ -96,10 +95,10 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	if clusterUtilization < capacity.MaxAllowedUtilization {
 		capacity.ScalingDirection = ScalingDirectionIn
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionIn) {
-			logging.Info("scaling operation (scale-in) fails to pass the safety check")
+			logging.Debug("scaling operation (scale-in) fails to pass the safety check")
 			return
 		}
-		logging.Info("scaling operation (scale-in) passes the safety check and will be permitted")
+		logging.Debug("scaling operation (scale-in) passes the safety check and will be permitted")
 	}
 
 	// If current utilization is greater than max allowed, check to see if we can
@@ -107,14 +106,14 @@ func (c *nomadClient) EvaluateClusterCapacity(capacity *structs.ClusterAllocatio
 	if clusterUtilization >= capacity.MaxAllowedUtilization {
 		capacity.ScalingDirection = ScalingDirectionOut
 		if !c.CheckClusterScalingSafety(capacity, config, ScalingDirectionOut) {
-			logging.Info("scaling operation (scale-out) fails to pass the safety check")
+			logging.Debug("scaling operation (scale-out) fails to pass the safety check")
 			return
 		}
 
-		logging.Info("scaling operation (scale-out) passes the safety check and will be permitted")
+		logging.Debug("scaling operation (scale-out) passes the safety check and will be permitted")
 	}
 
-	logging.Info("Last Scaling (in api): %v", capacity.LastScalingEvent)
+	logging.Debug("last Scaling (in api): %v", capacity.LastScalingEvent)
 
 	return true, nil
 }
@@ -133,7 +132,7 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 	if scaleDirection == ScalingDirectionIn {
 		// Determine if removing a node would violate safety thresholds or declared minimums
 		if (capacity.NodeCount <= 1) || ((capacity.NodeCount - 1) < config.ClusterScaling.MinSize) {
-			logging.Info("scale-in operation would violate safety thresholds or declared minimums")
+			logging.Debug("scale-in operation would violate safety thresholds or declared minimums")
 			return
 		}
 
@@ -147,12 +146,12 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 
 		// Evaluate utilization against new maximum allowed threshold and stop if a violation is present.
 		if (clusterUsedCapacity >= newMaxAllowedUtilization) || (newClusterUtilization >= scaleInCapacityThreshold) {
-			logging.Info("scale-in operation would violate or is too close to the maximum allowed cluster utilization threshold")
+			logging.Debug("scale-in operation would violate or is too close to the maximum allowed cluster utilization threshold")
 			return
 		}
 	} else if scaleDirection == ScalingDirectionOut {
 		if (capacity.NodeCount + 1) > config.ClusterScaling.MaxSize {
-			logging.Info("scale-out operation would violate declared maximum threshold")
+			logging.Debug("scale-out operation would violate declared maximum threshold")
 			return
 		}
 	}
@@ -160,7 +159,7 @@ func (c *nomadClient) CheckClusterScalingSafety(capacity *structs.ClusterAllocat
 	// Determine if performing a scaling operation would violate the scaling cooldown period.
 	if err := CheckClusterScalingTimeThreshold(config.ClusterScaling.CoolDown,
 		config.ClusterScaling.AutoscalingGroup, NewAWSAsgService(config.Region)); err != nil {
-		logging.Info("%v", err)
+		logging.Debug("%v", err)
 		return
 	}
 
@@ -370,7 +369,7 @@ func (c *nomadClient) MostUtilizedGroupResource(gsp *structs.GroupScalingPolicy)
 func (c *nomadClient) LeastAllocatedNode(clusterInfo *structs.ClusterAllocation) (nodeID, nodeIP string) {
 	var lowestAllocation float64
 
-	logging.Info("Scaling Metric: %v", clusterInfo.ScalingMetric)
+	logging.Debug("Scaling Metric: %v", clusterInfo.ScalingMetric)
 	for _, nodeAlloc := range clusterInfo.NodeAllocations {
 		switch clusterInfo.ScalingMetric {
 		case ScalingMetricProcessor:
@@ -478,11 +477,13 @@ func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 			for i, taskGroup := range jobResp.TaskGroups {
 				if group.Scaling.ScaleDirection == "Out" && *taskGroup.Count >= group.Scaling.Max ||
 					group.Scaling.ScaleDirection == "In" && *taskGroup.Count <= group.Scaling.Min {
-					logging.Info("scale %v not permitted due to constraints on job \"%v\" and group \"%v\"",
+					logging.Debug("scale %v not permitted due to constraints on job \"%v\" and group \"%v\"",
 						group.Scaling.ScaleDirection, *jobResp.ID, group.GroupName)
 					return
 				}
 
+				logging.Info("job scaling %v will now be actioned on job \"%v\" and group \"%v\"",
+					group.Scaling.ScaleDirection, scalingDoc.JobName, group.GroupName)
 				// Depending on the scaling direction decrement/incrament the count;
 				// currently replicator only supports addition/subtraction of 1.
 				if *taskGroup.Name == group.GroupName && group.Scaling.ScaleDirection == "Out" {
@@ -495,7 +496,6 @@ func (c *nomadClient) JobScale(scalingDoc *structs.JobScalingPolicy) {
 			}
 		}
 	}
-
 	// Nomad 0.5.5 introduced a Jobs.Validate endpoint within the API package
 	// which validates the job syntax before submition.
 	_, _, err = c.nomad.Jobs().Validate(jobResp, &nomad.WriteOptions{})
@@ -629,13 +629,13 @@ func PercentageCapacityRequired(capacity *structs.ClusterAllocation, nodeFailure
 		allocTotal = capacity.TaskAllocation.CPUMHz
 	}
 
-	logging.Info("Capacity Total: %v", capacityTotal)
-	logging.Info("Allocation Total: %v", allocTotal)
-	logging.Info("Node Count: %v", capacity.NodeCount)
+	logging.Debug("Capacity Total: %v", capacityTotal)
+	logging.Debug("Allocation Total: %v", allocTotal)
+	logging.Debug("Node Count: %v", capacity.NodeCount)
 
 	nodeAvgAlloc := float64(capacityTotal / capacity.NodeCount)
-	logging.Info("Node Avg Alloc: %v", nodeAvgAlloc)
-	logging.Info("Node Failure Count: %v", nodeFailureCount)
+	logging.Debug("Node Avg Alloc: %v", nodeAvgAlloc)
+	logging.Debug("Node Failure Count: %v", nodeFailureCount)
 	top := float64((float64(allocTotal)) + (float64(capacityTotal) - (nodeAvgAlloc * float64(nodeFailureCount))))
 	capacityRequired = (top / float64(capacityTotal)) * 100
 
@@ -663,7 +663,7 @@ func MaxAllowedClusterUtilization(capacity *structs.ClusterAllocation, nodeFault
 		capacityTotal = capacityTotal - nodeAvgAlloc
 	}
 
-	logging.Info("Node Average Capacity: %v, Scaling Overhead: %v", nodeAvgAlloc, allocTotal)
+	logging.Debug("node average capacity: %v, scaling overhead: %v", nodeAvgAlloc, allocTotal)
 
 	maxAllowedUtilization = ((capacityTotal - allocTotal) - (nodeAvgAlloc * nodeFaultTolerance))
 

@@ -78,6 +78,8 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 		TerminationPolicies:  terminationPolicies,
 	}
 
+	logging.Info("cluster scaling (scale-out) will now be initiated")
+
 	// Currently it is assumed that no error received from the API means that the
 	// increase in ASG size has been successful, or at least will be. This may
 	// want to change in the future.
@@ -91,7 +93,7 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 	ticker := time.NewTicker(time.Millisecond * 500)
 	timeout := time.Tick(time.Minute * 3)
 
-	logging.Info("scaling operation (scale-out) will now be varified, this may take a few minutes...")
+	logging.Info("cluster scaling operation (scale-out) will now be verified, this may take a few minutes...")
 
 	for {
 		select {
@@ -105,7 +107,7 @@ func ScaleOutCluster(asgName string, svc *autoscaling.AutoScaling) error {
 				logging.Error("an error occurred while attempting to check autoscaling group: %v", err)
 			} else {
 				if len(asg.AutoScalingGroups[0].Instances) == int(newDesiredCapacity) {
-					logging.Info("Scaling operation (scale-out) has been successfully verified")
+					logging.Info("cluster scaling operation (scale-out) has been successfully verified")
 					return nil
 				}
 			}

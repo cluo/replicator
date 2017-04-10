@@ -40,6 +40,7 @@ func (cli *CLI) Run(args []string) int {
 
 	c, err := cli.setup(args)
 	if err != nil {
+		logging.Error("unable to setup configuration: %v", err)
 		return ExitCodeParseFlagsError
 	}
 
