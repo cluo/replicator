@@ -11,6 +11,7 @@ import (
 	"github.com/elsevier-core-engineering/replicator/config"
 	"github.com/elsevier-core-engineering/replicator/logging"
 	"github.com/elsevier-core-engineering/replicator/replicator/structs"
+	"github.com/elsevier-core-engineering/replicator/version"
 )
 
 // Setup our exit codes; errors start at 10 for easier debugging.
@@ -63,6 +64,7 @@ func (cli *CLI) Run(args []string) int {
 		return ExitCodeRunnerError
 	}
 
+	logging.Debug("running version %v", version.GetHumanVersion())
 	go runner.Start()
 
 	signalCh := make(chan os.Signal, 1)
