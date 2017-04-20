@@ -607,41 +607,6 @@ func (c *nomadClient) IsJobRunning(jobID string) bool {
 	return true
 }
 
-// PercentageCapacityRequired accepts a number of cluster allocation parameters
-// to then calculate the acceptable percentage of capacity remainining to meet
-// the scaling and failure thresholds.
-//
-// nodeCount:         is the total number of ready worker nodes in the cluster
-// allocTotal:        is the allocation totals of each tasks assuming count = 1
-// capacityTotal:     is the total cluster allocation capacity
-// capacityUsed:      is the total cluster allocation currently in use
-// nodeFailureCount:  is the number of acceptable node failures to tollerate
-func PercentageCapacityRequired(capacity *structs.ClusterAllocation, nodeFailureCount int) (capacityRequired float64) {
-	var allocTotal, capacityTotal int
-
-	// Determine task allocation total based on cluster scaling metric.
-	switch capacity.ScalingMetric {
-	case ScalingMetricMemory:
-		capacityTotal = capacity.TotalCapacity.MemoryMB
-		allocTotal = capacity.TaskAllocation.MemoryMB
-	default:
-		capacityTotal = capacity.TotalCapacity.CPUMHz
-		allocTotal = capacity.TaskAllocation.CPUMHz
-	}
-
-	logging.Debug("Capacity Total: %v", capacityTotal)
-	logging.Debug("Allocation Total: %v", allocTotal)
-	logging.Debug("Node Count: %v", capacity.NodeCount)
-
-	nodeAvgAlloc := float64(capacityTotal / capacity.NodeCount)
-	logging.Debug("Node Avg Alloc: %v", nodeAvgAlloc)
-	logging.Debug("Node Failure Count: %v", nodeFailureCount)
-	top := float64((float64(allocTotal)) + (float64(capacityTotal) - (nodeAvgAlloc * float64(nodeFailureCount))))
-	capacityRequired = (top / float64(capacityTotal)) * 100
-
-	return capacityRequired
-}
-
 // MaxAllowedClusterUtilization calculates the maximum allowed cluster utilization after
 // taking into consideration node fault-tolerance and scaling overhead.
 func MaxAllowedClusterUtilization(capacity *structs.ClusterAllocation, nodeFaultTolerance int, scaleIn bool) (maxAllowedUtilization int) {
