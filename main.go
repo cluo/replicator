@@ -7,10 +7,14 @@ import (
 	"github.com/elsevier-core-engineering/replicator/replicator"
 )
 
+var (
+	config string
+)
+
 func init() {
-	// Setup the config CLI flag.
-	var config string
-	flag.StringVar(&config, "config", "", "config file to read overrides")
+
+	// Setup the config CLI flags.
+	flag.StringVar(&config, "config", "", "the relative path to a configuration file or directory")
 	flag.Parse()
 }
 

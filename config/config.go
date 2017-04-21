@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/elsevier-core-engineering/replicator/api"
 	"github.com/elsevier-core-engineering/replicator/logging"
@@ -132,6 +134,68 @@ func ParseConfig(path string) (*structs.Config, error) {
 	}
 
 	return c, nil
+}
+
+// FromPath iterates and merges all configuration files in a given directory
+// returning the resulting merged config based on lexical ordering for all
+// files found. If the passed object is a file this is read and merged into the
+// default config.
+func FromPath(path string) (*structs.Config, error) {
+
+	// Ensure the given filepath exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("the config file/folder %s is missing", path)
+	}
+
+	// Check if a file was given or a path to a directory
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to stat the config file %s", err)
+	}
+
+	// Recursively parse directories, single load files
+	if stat.Mode().IsDir() {
+
+		_, err := ioutil.ReadDir(path)
+		if err != nil {
+			return nil, fmt.Errorf("error listing config directory %s", err)
+		}
+
+		// Create a blank config to merge off of
+		config := DefaultConfig()
+
+		err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Do nothing for directories
+			if info.IsDir() {
+				return nil
+			}
+
+			// Parse and merge the config
+			newConfig, err := ParseConfig(path)
+
+			if err != nil {
+				return err
+			}
+			newConfig.Merge(config)
+			config = newConfig
+
+			return nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("config: walk error: %s", err)
+		}
+
+		return config, nil
+	} else if stat.Mode().IsRegular() {
+		return ParseConfig(path)
+	}
+
+	return nil, fmt.Errorf("unknown config filetype %q", stat.Mode().String())
 }
 
 // flattenKeys is a function that takes a map[string]interface{} and recursively

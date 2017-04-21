@@ -21,7 +21,7 @@ const (
 	ExitCodeError = 10 + iota
 	ExitCodeRunnerError
 	ExitCodeInterrupt
-	ExitCodeParseFlagsError
+	ExitCodeParseConfigError
 	ExitCodeTelemtryError
 )
 
@@ -41,8 +41,8 @@ func (cli *CLI) Run(args []string) int {
 
 	c, err := cli.setup(args)
 	if err != nil {
-		logging.Error("unable to setup configuration: %v", err)
-		return ExitCodeParseFlagsError
+		logging.Error("unable to parse configuration: %v", err)
+		return ExitCodeParseConfigError
 	}
 
 	// Set the logging level for the logger.
@@ -89,7 +89,7 @@ func (cli *CLI) Run(args []string) int {
 				// Reload the configuration in order to make proper use of SIGHUP.
 				c, err := cli.setup(args)
 				if err != nil {
-					return ExitCodeParseFlagsError
+					return ExitCodeParseConfigError
 				}
 
 				// Setup a new runner with the new configuration.
@@ -109,39 +109,31 @@ func (cli *CLI) Run(args []string) int {
 // object.
 func (cli *CLI) setup(args []string) (*structs.Config, error) {
 
-	file := "/etc/replicator.d/replicator.hcl"
-	var c *structs.Config
-	var err error
-
-	// When no command line arguments are passed the default configuration file
-	// is initially checked for existance
-	if len(args) == 0 {
-		if _, er := os.Stat(file); os.IsNotExist(er) {
-			return config.DefaultConfig(), nil
-		}
-		c, err = config.ParseConfig(file)
-		if err != nil {
-			return nil, fmt.Errorf("%v", err)
-		}
-		return c, nil
-	}
-
 	// If the length of the CLI args is greater than one then there is an error.
 	if len(args) > 1 {
 		return nil, fmt.Errorf("too many command line args\n %v", usage)
 	}
 
-	// If one CLI argument is passed this is split using the equals delimiter and
-	// the right hand side used as the configuration file to parse.
-	if len(args) == 1 {
-		s := strings.Split(args[0], "=")
-		c, err = config.ParseConfig(s[1])
-
-		if err != nil {
-			return nil, fmt.Errorf("%v", err)
-		}
+	// If no cli flags are passed then we just return a default configuration
+	// struct for use.
+	if len(args) == 0 {
+		return config.DefaultConfig(), nil
 	}
-	return c, nil
+
+	// If one CLI argument is passed this is split using the equals delimiter and
+	// the right hand side used as the configuration file/path to parse.
+	split := strings.Split(args[0], "=")
+
+	switch p := split[0]; p {
+	case "-config":
+		c, err := config.FromPath(split[1])
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	default:
+		return nil, fmt.Errorf("unable to correctly determine config location %v", split[1])
+	}
 }
 
 const usage = `
@@ -149,6 +141,6 @@ Usage: replicator [options]
 
 Options:
   -config=<path>
-      Sets the path to a configuration file on disk. This should be the full
-      path rather than relative path.
+      The path to a configuration file or directory of configuration files on
+			disk, relative to the current working directory.
 `
