@@ -64,7 +64,7 @@ func (cli *CLI) Run(args []string) int {
 		return ExitCodeRunnerError
 	}
 
-	logging.Debug("running version %v", version.GetHumanVersion())
+	logging.Debug("running version %v", version.Get())
 	go runner.Start()
 
 	signalCh := make(chan os.Signal, 1)
