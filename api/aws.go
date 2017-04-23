@@ -274,6 +274,44 @@ func terminateInstance(instanceID, region string) error {
 	return nil
 }
 
+// GetMostRecentInstance identifies the instance most recently launched in a
+// specified autoscaling group.
+func GetMostRecentInstance(autoscalingGroup string) (node string) {
+	sess := session.Must(session.NewSession())
+	svc := ec2.New(sess)
+
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{ // Required
+				Name: aws.String("tag:aws:autoscaling:groupName"),
+				Values: []*string{
+					aws.String(autoscalingGroup),
+				},
+			},
+		},
+	}
+
+	res, err := svc.DescribeInstances(params)
+	if err != nil {
+		fmt.Println(err)
+	}
+	for _, i := range res.Reservations {
+		fmt.Println(i.Instances)
+	}
+	// for _, i := range res.Reservations[0].Instances {
+	// 	var nt string
+	// 	for _, t := range i.Tags {
+	// 		if *t.Key == "Name" {
+	// 			nt = *t.Value
+	// 			break
+	// 		}
+	// 	}
+	// 	fmt.Println(nt, *i.InstanceId, *i.State.Name)
+	// }
+
+	return
+}
+
 func translateIptoID(ip, region string) (id string) {
 	sess := session.Must(session.NewSession())
 	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})

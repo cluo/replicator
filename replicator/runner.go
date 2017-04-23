@@ -30,7 +30,7 @@ func NewRunner(config *structs.Config) (*Runner, error) {
 // Start creates a new runner and uses a ticker to block until the doneChan is
 // closed at which point the ticker is stopped.
 func (r *Runner) Start() {
-	ticker := time.NewTicker(time.Second * time.Duration(10))
+	ticker := time.NewTicker(time.Second * time.Duration(3))
 
 	defer ticker.Stop()
 
@@ -61,6 +61,8 @@ func (r *Runner) Stop() {
 func (r *Runner) clusterScaling(done chan bool) {
 	nomadClient := r.config.NomadClient
 	scalingEnabled := r.config.ClusterScaling.Enabled
+
+	api.GetMostRecentInstance(r.config.ClusterScaling.AutoscalingGroup)
 
 	// Determine if we are running on the leader node, halt if not.
 	if haveLeadership := nomadClient.LeaderCheck(); !haveLeadership {
